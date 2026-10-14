@@ -61,7 +61,6 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<Home />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/trip/:tripKey" element={<TripDetail />} />
-        <Route path="/checkout" element={<Checkout />} />
         <Route path="/booking/:ref" element={<BookingConfirmation />} />
         <Route path="/routes/:slug" element={<RoutePage />} />
         <Route path="/city/:slug" element={<CityPage />} />
@@ -70,6 +69,7 @@ const AuthenticatedApp = () => {
         <Route path="/help" element={<Help />} />
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route path="/trips" element={<MyTrips />} />
+          <Route path="/checkout" element={<Checkout />} />
         </Route>
       </Route>
 
