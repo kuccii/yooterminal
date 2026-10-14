@@ -78,6 +78,7 @@ load `.env` files, and a missing `BETTER_AUTH_SECRET` is a startup error):
 - `PORT` — API/static port (default `3001`)
 - `FLW_PUBLIC_KEY` — Flutterwave public key (enables the checkout popup)
 - `FLW_SECRET_KEY` — Flutterwave secret key (server-side payment verification)
+- `FLW_WEBHOOK_SECRET` — Flutterwave webhook verif-hash (enables the payment webhook at `/api/payments/webhook`)
 - `SMTP_HOST` — SMTP server hostname (email disabled when unset)
 - `SMTP_PORT` — SMTP port (default `587`; `465` enables implicit TLS)
 - `SMTP_USER` — SMTP username

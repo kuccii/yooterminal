@@ -1,7 +1,7 @@
 import db from '@/api/client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { BarChart3, BusFront, Image as ImageIcon, LayoutDashboard, Map, ShieldCheck, UserCog, Users } from 'lucide-react';
+import { BadgePercent, BarChart3, BusFront, Image as ImageIcon, LayoutDashboard, Map, ShieldCheck, UserCog, Users } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -10,6 +10,7 @@ import AdminContentTab from '@/components/admin/AdminContentTab';
 import AdminOperatorsTab from '@/components/admin/AdminOperatorsTab';
 import AdminOperationsTab from '@/components/admin/AdminOperationsTab';
 import AdminOverviewTab from '@/components/admin/AdminOverviewTab';
+import AdminRefundsTab from '@/components/admin/AdminRefundsTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminRoutesTab from '@/components/admin/AdminRoutesTab';
 import AdminUsersTab from '@/components/admin/AdminUsersTab';
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { id: 'operators', label: 'Operators', icon: Users },
   { id: 'routes', label: 'Routes & stops', icon: Map },
   { id: 'operations', label: 'Fleet & departures', icon: BusFront },
+  { id: 'refunds', label: 'Refunds', icon: BadgePercent },
   { id: 'content', label: 'Content', icon: ImageIcon },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
 ];
@@ -102,6 +104,8 @@ export default function AdminPanel() {
         );
       case 'users':
         return <AdminUsersTab currentUserId={user.id} />;
+      case 'refunds':
+        return <AdminRefundsTab />;
       case 'routes':
         return <AdminRoutesTab routes={state.routes} cities={state.cities} onChanged={load} />;
       case 'operations':

@@ -3,6 +3,7 @@ import { sqlite } from './db.js';
 import { getCaller } from './auth.js';
 import { HttpError } from './entities.js';
 import { writeAuditLog } from './audit.js';
+import { attemptRefund } from './payments.js';
 
 const ROLES = ['user', 'operator', 'admin'];
 
@@ -79,6 +80,66 @@ export function createAdminRouter() {
     });
 
     res.json({ id: user.id, email: user.email, name: user.name, role });
+  });
+
+  router.get('/refunds', async (req, res) => {
+    await requireAdmin(req);
+
+    const rows = sqlite
+      .prepare(
+        `SELECT id, booking_ref, status, refund_status, refund_attempts, refund_next_attempt_at,
+                amount, currency, travel_date, origin_city, destination_city, operator_name,
+                contact_name, contact_email, payment_tx_id, cancelled_at
+           FROM booking
+          WHERE refund_status IS NOT NULL AND refund_status != ''
+          ORDER BY cancelled_at DESC
+          LIMIT 200`,
+      )
+      .all();
+
+    res.json({
+      refunds: rows.map((row) => ({
+        id: row.id,
+        booking_ref: row.booking_ref,
+        status: row.status,
+        refund_status: row.refund_status,
+        refund_attempts: Number(row.refund_attempts) || 0,
+        refund_next_attempt_at: row.refund_next_attempt_at === null ? null : Number(row.refund_next_attempt_at),
+        amount: Number(row.amount),
+        currency: row.currency,
+        travel_date: row.travel_date,
+        origin_city: row.origin_city,
+        destination_city: row.destination_city,
+        operator_name: row.operator_name,
+        contact_name: row.contact_name,
+        contact_email: row.contact_email,
+        payment_tx_id: row.payment_tx_id,
+        cancelled_at: row.cancelled_at,
+      })),
+    });
+  });
+
+  router.post('/refunds/:id/retry', async (req, res) => {
+    const caller = await requireAdmin(req);
+
+    const bookingId = String(req.params.id || '');
+    const booking = sqlite.prepare('SELECT * FROM booking WHERE id = ?').get(bookingId);
+    if (!booking) throw new HttpError(404, 'Booking not found');
+    if (booking.refund_status !== 'refund_pending') {
+      throw new HttpError(409, 'This booking has no pending refund');
+    }
+
+    const refundStatus = await attemptRefund(booking);
+    writeAuditLog({
+      actorId: caller.id,
+      action: 'refund.admin_retry',
+      entity: 'booking',
+      entityId: booking.id,
+      before: { refund_status: booking.refund_status },
+      after: { refund_status: refundStatus },
+    });
+
+    res.json({ id: booking.id, booking_ref: booking.booking_ref, refund_status: refundStatus });
   });
 
   return router;

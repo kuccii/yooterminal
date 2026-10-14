@@ -10,6 +10,7 @@ import { createCouponsRouter } from './coupons.js';
 import { createAdminRouter } from './admin.js';
 import { createSeatsRouter } from './seats.js';
 import { sweepExpiredHolds } from './booking.js';
+import { runRefundQueue } from './payments.js';
 import { sendDepartureReminder } from './notifications.js';
 import { sqlite } from './db.js';
 
@@ -99,8 +100,16 @@ function runDepartureReminders() {
 }
 
 const REMINDER_INTERVAL_MS = 60 * 60 * 1000;
-setInterval(runDepartureReminders, REMINDER_INTERVAL_MS);
+setInterval(() => {
+  runDepartureReminders();
+  runRefundQueue().catch((error) => {
+    console.error('[server] Refund queue run failed:', error);
+  });
+}, REMINDER_INTERVAL_MS);
 runDepartureReminders();
+runRefundQueue().catch((error) => {
+  console.error('[server] Refund queue run failed:', error);
+});
 
 const HOLD_SWEEP_INTERVAL_MS = 60 * 1000;
 setInterval(() => {

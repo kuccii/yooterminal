@@ -1,5 +1,5 @@
 import express from 'express';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { sqlite } from './db.js';
 import { getCaller } from './auth.js';
 import { HttpError } from './entities.js';
@@ -18,6 +18,79 @@ const FLW_VERIFY_URL = 'https://api.flutterwave.com/v3/transactions';
 const FLW_REFUND_URL = 'https://api.flutterwave.com/v3/refunds';
 const CANCEL_CUTOFF_HOURS = 3;
 const KAMPALA_UTC_OFFSET = '+03:00';
+const REFUND_BACKOFF_MS = [15 * 60 * 1000, 60 * 60 * 1000, 6 * 60 * 60 * 1000, 24 * 60 * 60 * 1000];
+
+function refundBackoff(attempts) {
+  const index = Math.min(Math.max(Number(attempts) || 0, 0), REFUND_BACKOFF_MS.length - 1);
+  return REFUND_BACKOFF_MS[index];
+}
+
+export async function attemptRefund(booking) {
+  const attempts = (Number(booking.refund_attempts) || 0) + 1;
+  if (!booking.payment_tx_id) {
+    sqlite
+      .prepare("UPDATE booking SET refund_status = 'not_refunded', refund_attempts = ?, refund_next_attempt_at = NULL WHERE id = ?")
+      .run(attempts, booking.id);
+    return 'not_refunded';
+  }
+  const status = await requestFlutterwaveRefund(booking.payment_tx_id, process.env.FLW_SECRET_KEY);
+  const nextAttemptAt = status === 'refunded' ? null : Date.now() + refundBackoff(attempts);
+  sqlite
+    .prepare('UPDATE booking SET refund_status = ?, refund_attempts = ?, refund_next_attempt_at = ? WHERE id = ?')
+    .run(status, attempts, nextAttemptAt, booking.id);
+  writeAuditLog({
+    actorId: null,
+    action: 'refund.attempt',
+    entity: 'booking',
+    entityId: booking.id,
+    before: { refund_status: booking.refund_status || null, refund_attempts: Number(booking.refund_attempts) || 0 },
+    after: { refund_status: status, refund_attempts: attempts },
+  });
+  return status;
+}
+
+export async function runRefundQueue() {
+  if (!process.env.FLW_SECRET_KEY) return 0;
+  const now = Date.now();
+  const due = sqlite
+    .prepare(
+      `SELECT * FROM booking
+        WHERE status = 'cancelled' AND refund_status = 'refund_pending'
+          AND (refund_next_attempt_at IS NULL OR refund_next_attempt_at <= ?)
+        LIMIT 20`,
+    )
+    .all(now);
+  for (const booking of due) {
+    try {
+      await attemptRefund(booking);
+    } catch (error) {
+      console.error('[server] Refund retry failed for', booking.booking_ref, error);
+    }
+  }
+  return due.length;
+}
+
+function rawWebhookHash() {
+  return String(process.env.FLW_WEBHOOK_SECRET || '');
+}
+
+function hashMatches(expected, actual) {
+  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer = Buffer.from(actual);
+  if (expectedBuffer.length !== actualBuffer.length) return false;
+  return timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
+function findBookingForTx(ids) {
+  for (const id of ids) {
+    if (!id) continue;
+    const found = sqlite
+      .prepare('SELECT * FROM booking WHERE payment_tx_id = ? OR booking_ref = ? LIMIT 1')
+      .get(String(id), String(id));
+    if (found) return found;
+  }
+  return null;
+}
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -315,9 +388,8 @@ export function createPaymentsRouter() {
 
     let refundStatus = 'not_refunded';
     if (booking.payment_tx_id && process.env.FLW_SECRET_KEY) {
-      refundStatus = await requestFlutterwaveRefund(booking.payment_tx_id, process.env.FLW_SECRET_KEY);
+      refundStatus = await attemptRefund(booking);
     }
-    sqlite.prepare('UPDATE booking SET refund_status = ? WHERE id = ?').run(refundStatus, booking.id);
 
     writeAuditLog({
       actorId: caller.id,
@@ -331,6 +403,73 @@ export function createPaymentsRouter() {
     void sendCancellation({ ...booking, refund_status: refundStatus });
 
     res.json({ booking_ref: booking.booking_ref, status: 'cancelled', refund_status: refundStatus });
+  });
+
+  router.post('/webhook', async (req, res) => {
+    const secret = rawWebhookHash();
+    if (!secret) {
+      throw new HttpError(503, 'Webhook is not configured on this server');
+    }
+    const received = String(req.get('verif-hash') || '');
+    if (!received || !hashMatches(secret, received)) {
+      throw new HttpError(401, 'Invalid webhook signature');
+    }
+
+    const event = String((req.body || {}).event || '');
+    const data = (req.body || {}).data || {};
+
+    if (event === 'charge.completed') {
+      if (String(data.status || '') !== 'successful') return res.json({ received: true, ignored: true });
+      const booking = findBookingForTx([data.tx_ref]);
+      if (booking) {
+        if (booking.status === 'paid') return res.json({ received: true, booking_ref: booking.booking_ref, already_paid: true });
+        const now = new Date().toISOString();
+        sqlite
+          .prepare("UPDATE booking SET status = 'paid', payment_tx_id = ?, paid_at = ? WHERE id = ? AND status != 'paid'")
+          .run(String(data.id ?? ''), now, booking.id);
+        const fresh = sqlite.prepare('SELECT * FROM booking WHERE id = ?').get(booking.id);
+        void sendBookingConfirmation(fresh);
+        writeAuditLog({
+          actorId: null,
+          action: 'booking.webhook_paid',
+          entity: 'booking',
+          entityId: booking.id,
+          before: { status: booking.status },
+          after: { status: 'paid' },
+        });
+        return res.json({ received: true, booking_ref: booking.booking_ref });
+      }
+      writeAuditLog({
+        actorId: null,
+        action: 'payment.orphan_webhook',
+        entity: 'payment',
+        entityId: String(data.tx_ref || data.id || 'unknown'),
+        before: null,
+        after: { event, amount: data.amount ?? null, currency: data.currency ?? null, tx_ref: data.tx_ref ?? null },
+      });
+      return res.json({ received: true, ignored: true });
+    }
+
+    if (event.startsWith('refund.')) {
+      const booking = findBookingForTx([data.charge_id, data.transaction_id, data.tx_ref, data.flwref]);
+      if (booking && String(data.status || '').toLowerCase() === 'successful') {
+        sqlite
+          .prepare("UPDATE booking SET refund_status = 'refunded', refund_next_attempt_at = NULL WHERE id = ? AND refund_status != 'refunded'")
+          .run(booking.id);
+        writeAuditLog({
+          actorId: null,
+          action: 'refund.webhook_confirmed',
+          entity: 'booking',
+          entityId: booking.id,
+          before: { refund_status: booking.refund_status || null },
+          after: { refund_status: 'refunded', event },
+        });
+        return res.json({ received: true, booking_ref: booking.booking_ref });
+      }
+      return res.json({ received: true, ignored: true });
+    }
+
+    return res.json({ received: true, ignored: true });
   });
 
   return router;
