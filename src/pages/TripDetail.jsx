@@ -43,6 +43,7 @@ export default function TripDetail() {
           operator_slug: parsed.operator_slug,
           departure_time: parsed.departure_time,
           active: true,
+          operator_status: 'approved',
         },
         { limit: 1 }
       );
