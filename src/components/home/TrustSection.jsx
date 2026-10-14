@@ -25,7 +25,7 @@ export default function TrustSection() {
   return (
     <section className="border-y border-border bg-card">
       <div className="mx-auto flex max-w-6xl flex-col items-center px-4 py-10 text-center">
-        <h2 className="font-display text-2xl font-extrabold tracking-tight">People from around the world trust BusLink</h2>
+        <h2 className="font-display text-2xl font-extrabold tracking-tight">People from around the world trust YooTerminal</h2>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
           <span className="rounded-full bg-[hsl(var(--trust))] px-3 py-1 text-sm font-bold text-white">Excellent</span>
           <Stars rating={stats?.average || 5} size="lg" />

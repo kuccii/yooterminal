@@ -3,7 +3,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 
 const FAQS = [
   {
-    q: 'How do I book a bus ticket on BusLink?',
+    q: 'How do I book a bus ticket on YooTerminal?',
     a: 'Search your route, compare departures and fares from every operator on that route, pick your seats, and pay securely by card or mobile money. Your e-ticket arrives instantly — no printing needed.',
   },
   {

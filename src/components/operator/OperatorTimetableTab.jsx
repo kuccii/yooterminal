@@ -349,7 +349,7 @@ export default function OperatorTimetableTab({ operator, routes }) {
           </FormField>
 
           <div className="flex items-center justify-between rounded-xl border border-border p-3">
-            <span className="text-sm font-medium">On sale on BusLink</span>
+            <span className="text-sm font-medium">On sale on YooTerminal</span>
             <Switch checked={form.active} onCheckedChange={(checked) => setForm({ ...form, active: checked })} />
           </div>
 
