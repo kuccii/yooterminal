@@ -9,6 +9,7 @@ import OperatorAvatar from '@/components/OperatorAvatar';
 import OperatorBookingsTab from '@/components/operator/OperatorBookingsTab';
 import OperatorEarningsTab from '@/components/operator/OperatorEarningsTab';
 import OperatorFleetTab from '@/components/operator/OperatorFleetTab';
+import OperatorOverviewTab from '@/components/operator/OperatorOverviewTab';
 import OperatorTimetableTab from '@/components/operator/OperatorTimetableTab';
 import OperatorValidationTab from '@/components/operator/OperatorValidationTab';
 import { Card } from '@/components/ui/card';
@@ -22,6 +23,7 @@ const STATUS_STYLES = {
 };
 
 const NAV_ITEMS = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'timetable', label: 'Timetable & fares', icon: CalendarClock },
   { id: 'fleet', label: 'Fleet', icon: BusFront },
   { id: 'bookings', label: 'Booked tickets', icon: Ticket },
@@ -31,7 +33,7 @@ const NAV_ITEMS = [
 
 export default function OperatorDashboard() {
   const { user, isLoadingAuth } = useAuth();
-  const [active, setActive] = useState('timetable');
+  const [active, setActive] = useState('overview');
   const [state, setState] = useState({ loading: true, operators: [], routes: [], setting: null, picked: '' });
 
   const load = useCallback(async () => {
@@ -97,6 +99,8 @@ export default function OperatorDashboard() {
 
   const renderSection = () => {
     switch (active) {
+      case 'overview':
+        return <OperatorOverviewTab operator={operator} routes={state.routes} onNavigate={setActive} />;
       case 'fleet':
         return <OperatorFleetTab operator={operator} />;
       case 'bookings':

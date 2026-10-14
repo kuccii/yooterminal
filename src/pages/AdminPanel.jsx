@@ -1,7 +1,7 @@
 import db from '@/api/client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { BarChart3, BusFront, Image as ImageIcon, Map, ShieldCheck, Users } from 'lucide-react';
+import { BarChart3, BusFront, Image as ImageIcon, LayoutDashboard, Map, ShieldCheck, Users } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -9,10 +9,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import AdminContentTab from '@/components/admin/AdminContentTab';
 import AdminOperatorsTab from '@/components/admin/AdminOperatorsTab';
 import AdminOperationsTab from '@/components/admin/AdminOperationsTab';
+import AdminOverviewTab from '@/components/admin/AdminOverviewTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminRoutesTab from '@/components/admin/AdminRoutesTab';
 
 const NAV_ITEMS = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'operators', label: 'Operators', icon: Users },
   { id: 'routes', label: 'Routes & stops', icon: Map },
   { id: 'operations', label: 'Fleet & departures', icon: BusFront },
@@ -24,7 +26,7 @@ const SUBTITLE = 'Run the network: approve operators, set commission, curate the
 
 export default function AdminPanel() {
   const { user, isLoadingAuth } = useAuth();
-  const [active, setActive] = useState('operators');
+  const [active, setActive] = useState('overview');
   const [state, setState] = useState({
     loading: true,
     operators: [],
@@ -87,6 +89,15 @@ export default function AdminPanel() {
 
   const renderSection = () => {
     switch (active) {
+      case 'overview':
+        return (
+          <AdminOverviewTab
+            operators={state.operators}
+            routes={state.routes}
+            onChanged={load}
+            onNavigate={setActive}
+          />
+        );
       case 'routes':
         return <AdminRoutesTab routes={state.routes} cities={state.cities} onChanged={load} />;
       case 'operations':
