@@ -11,10 +11,22 @@ import StatCard from '@/components/manage/StatCard';
 import { commissionPercentFor } from '@/lib/commission';
 import { formatMoney } from '@/lib/format';
 
+function moneyValue(entries, fallback) {
+  if (entries.length === 1) return formatMoney(entries[0].value, entries[0].currency);
+  if (!entries.length) return formatMoney(0, fallback);
+  return (
+    <span className="flex flex-col gap-0.5 text-xl">
+      {entries.map((entry) => (
+        <span key={entry.currency}>{formatMoney(entry.value, entry.currency)}</span>
+      ))}
+    </span>
+  );
+}
+
 export default function OperatorEarningsTab({ operator, setting }) {
   const [state, setState] = useState({
     loading: true,
-    totals: null,
+    totals: [],
     byRoute: [],
     departures: [],
   });
@@ -23,22 +35,33 @@ export default function OperatorEarningsTab({ operator, setting }) {
     let active = true;
 
     (async () => {
-      const [totals, byRoute, holds, schedules] = await Promise.all([
-        db.entities.Booking.aggregate({
-          query: { operator_slug: operator.slug, status: 'paid' },
-          sum: ['amount', 'platform_fee', 'passenger_count'],
-          avg: 'amount',
-        }),
-        db.entities.Booking.aggregate({
-          query: { operator_slug: operator.slug, status: 'paid' },
-          groupBy: 'route_slug',
-          sum: ['amount', 'passenger_count'],
-          sort: '-sum_amount',
-          limit: 8,
-        }),
+      const query = { operator_slug: operator.slug, status: 'paid' };
+      const totals = await db.entities.Booking.aggregate({
+        query,
+        groupBy: 'currency',
+        sum: ['amount', 'platform_fee', 'operator_net', 'passenger_count'],
+      });
+      const currencies = [...new Set((totals.rows || []).map((row) => row.currency || 'UGX'))];
+
+      const [routeAggs, holds, schedules] = await Promise.all([
+        Promise.all(
+          currencies.map((currency) =>
+            db.entities.Booking.aggregate({
+              query: { ...query, currency },
+              groupBy: 'route_slug',
+              sum: ['amount', 'passenger_count'],
+              sort: '-sum_amount',
+              limit: 8,
+            })
+          )
+        ),
         db.entities.DepartureSeat.filter(
           { operator_slug: operator.slug },
-          { sort: '-travel_date', limit: 100, fields: ['travel_date', 'route_slug', 'departure_time', 'seats'] }
+          {
+            sort: '-travel_date',
+            limit: 100,
+            fields: ['trip_key', 'travel_date', 'route_slug', 'departure_time', 'seats'],
+          }
         ),
         db.entities.Schedule.filter(
           { operator_slug: operator.slug },
@@ -58,28 +81,52 @@ export default function OperatorEarningsTab({ operator, setting }) {
       if (!active) return;
 
       const scheduleList = schedules.items || [];
-      const departures = (holds.items || []).map((hold) => {
-        const schedule = scheduleList.find(
-          (entry) => entry.route_slug === hold.route_slug && entry.departure_time === hold.departure_time
-        );
-        const sold = (hold.seats || []).length;
-        const capacity = schedule?.seats_total || 0;
-        return {
-          id: hold.id,
+
+      const byTrip = new Map();
+      (holds.items || []).forEach((hold) => {
+        const key = hold.trip_key || `${hold.route_slug}~${hold.departure_time}~${hold.travel_date}`;
+        const entry = byTrip.get(key) || {
           travel_date: hold.travel_date,
+          route_slug: hold.route_slug,
           departure_time: hold.departure_time,
-          label: schedule ? `${schedule.origin_city} → ${schedule.destination_city}` : hold.route_slug,
+          sold: 0,
+        };
+        entry.sold += (hold.seats || []).length;
+        byTrip.set(key, entry);
+      });
+      const departures = [...byTrip.entries()].map(([key, entry]) => {
+        const schedule = scheduleList.find(
+          (item) => item.route_slug === entry.route_slug && item.departure_time === entry.departure_time
+        );
+        const capacity = Number(schedule?.seats_total) || 0;
+        return {
+          id: key,
+          travel_date: entry.travel_date,
+          departure_time: entry.departure_time,
+          label: schedule ? `${schedule.origin_city} → ${schedule.destination_city}` : entry.route_slug,
           currency: schedule?.currency || 'UGX',
-          sold,
+          sold: entry.sold,
           capacity,
-          percent: capacity ? Math.round((sold / capacity) * 100) : 0,
+          percent: capacity ? Math.round((entry.sold / capacity) * 100) : 0,
         };
       });
 
+      const routeMap = new Map();
+      routeAggs.forEach((agg, index) => {
+        const currency = currencies[index];
+        (agg.rows || []).forEach((row) => {
+          const entry = routeMap.get(row.route_slug) || { route_slug: row.route_slug, tickets: 0, revenue: {} };
+          entry.tickets += Number(row.sum_passenger_count) || 0;
+          entry.revenue[currency] = (entry.revenue[currency] || 0) + (Number(row.sum_amount) || 0);
+          routeMap.set(row.route_slug, entry);
+        });
+      });
+      const byRoute = [...routeMap.values()].sort((a, b) => b.tickets - a.tickets);
+
       setState({
         loading: false,
-        totals: totals.rows?.[0] || null,
-        byRoute: byRoute.rows || [],
+        totals: totals.rows || [],
+        byRoute,
         departures,
       });
     })();
@@ -98,12 +145,20 @@ export default function OperatorEarningsTab({ operator, setting }) {
     );
   }
 
-  const totals = state.totals || {};
   const percent = commissionPercentFor(operator, setting, false);
-  const gross = totals.sum_amount || 0;
-  const commission = totals.sum_platform_fee || Math.round((gross * percent) / 100);
-  const net = gross - commission;
-  const tickets = totals.sum_passenger_count || 0;
+  const fallbackCurrency = operator.currency || 'UGX';
+  const splitRows = state.totals.map((row) => {
+    const gross = Number(row.sum_amount) || 0;
+    const fee = row.sum_platform_fee ?? Math.round((gross * percent) / 100);
+    return {
+      currency: row.currency || 'UGX',
+      gross,
+      fee,
+      net: row.sum_operator_net ?? gross - fee,
+    };
+  });
+  const tickets = state.totals.reduce((total, row) => total + (Number(row.sum_passenger_count) || 0), 0);
+  const paidCount = state.totals.reduce((total, row) => total + (Number(row.count) || 0), 0);
   const capacity = state.departures.reduce((total, row) => total + row.capacity, 0);
   const sold = state.departures.reduce((total, row) => total + row.sold, 0);
   const load = capacity ? Math.round((sold / capacity) * 100) : 0;
@@ -113,18 +168,31 @@ export default function OperatorEarningsTab({ operator, setting }) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Ticket revenue"
-          value={formatMoney(gross, operator.currency || 'UGX')}
-          hint="Fares in different currencies are added together."
+          value={moneyValue(
+            splitRows.map((row) => ({ currency: row.currency, value: row.gross })),
+            fallbackCurrency
+          )}
+          hint={`${paidCount} paid ticket${paidCount === 1 ? '' : 's'}`}
           icon={BadgeDollarSign}
         />
         <StatCard label="Passengers carried" value={tickets.toLocaleString('en-US')} icon={Ticket} />
         <StatCard
           label={`Platform commission · ${percent}%`}
-          value={formatMoney(commission, operator.currency || 'UGX')}
+          value={moneyValue(
+            splitRows.map((row) => ({ currency: row.currency, value: row.fee })),
+            fallbackCurrency
+          )}
           hint={operator.commission_percent ? 'Your contracted rate' : 'Platform default rate'}
           icon={Percent}
         />
-        <StatCard label="Net payout" value={formatMoney(net, operator.currency || 'UGX')} icon={Users} />
+        <StatCard
+          label="Net payout"
+          value={moneyValue(
+            splitRows.map((row) => ({ currency: row.currency, value: row.net })),
+            fallbackCurrency
+          )}
+          icon={Users}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -174,9 +242,11 @@ export default function OperatorEarningsTab({ operator, setting }) {
                 {state.byRoute.map((row) => (
                   <TableRow key={row.route_slug}>
                     <TableCell className="text-sm font-medium">{row.route_slug.replace(/-/g, ' → ')}</TableCell>
-                    <TableCell className="text-sm">{row.sum_passenger_count || 0}</TableCell>
+                    <TableCell className="text-sm">{row.tickets}</TableCell>
                     <TableCell className="text-right text-sm">
-                      {formatMoney(row.sum_amount || 0, operator.currency || 'UGX')}
+                      {Object.entries(row.revenue).map(([currency, value]) => (
+                        <p key={currency}>{formatMoney(value, currency)}</p>
+                      ))}
                     </TableCell>
                   </TableRow>
                 ))}
