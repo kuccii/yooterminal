@@ -1,0 +1,68 @@
+import { betterAuth } from 'better-auth';
+import { emailOTP } from 'better-auth/plugins';
+import { sqlite } from './db.js';
+
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const EXTRA_ORIGINS = (process.env.TRUSTED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+export const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
+export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET || 'dev-secret-change-me-set-BETTER_AUTH_SECRET',
+  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3001',
+  basePath: '/api/auth',
+  // The Vite dev server proxies /api but keeps its own origin; allow it plus
+  // any extra origins listed in TRUSTED_ORIGINS (comma separated).
+  trustedOrigins: [CLIENT_ORIGIN, ...EXTRA_ORIGINS],
+  database: sqlite,
+  emailAndPassword: {
+    enabled: true,
+    sendResetPassword: async ({ user, token }) => {
+      const link = `${CLIENT_ORIGIN}/reset-password?token=${encodeURIComponent(token)}`;
+      console.log(`[auth] Password reset requested for ${user.email}`);
+      console.log(`[auth]   Open this link: ${link}`);
+    },
+  },
+  ...(googleEnabled
+    ? {
+      socialProviders: {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+      },
+    }
+    : {}),
+  user: {
+    additionalFields: {
+      role: { type: 'string', defaultValue: 'user', input: false },
+    },
+  },
+  plugins: [
+    emailOTP({
+      sendVerificationOTP: async ({ email, otp }) => {
+        // Dev-mode delivery: print the code. Swap for SMTP later.
+        console.log(`[auth] OTP for ${email}: ${otp}`);
+      },
+    }),
+  ],
+});
+
+/** Resolve the signed-in user for a request, or null. */
+export async function getCaller(req) {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session || !session.user) return null;
+    return {
+      id: session.user.id,
+      email: session.user.email,
+      role: session.user.role || 'user',
+      name: session.user.name || '',
+    };
+  } catch {
+    return null;
+  }
+}

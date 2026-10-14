@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-label="Kigali, city of a thousand hills">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset=".55" stop-color="#fbcfe8"/>
+      <stop offset="1" stop-color="#fecdd3"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <circle cx="950" cy="160" r="58" fill="#fff1f2" opacity=".9"/>
+  <g fill="#fef9c7" opacity=".75">
+    <ellipse cx="300" cy="140" rx="90" ry="24"/>
+    <ellipse cx="380" cy="122" rx="56" ry="18"/>
+    <ellipse cx="760" cy="230" rx="70" ry="18"/>
+  </g>
+  <path d="M0 430 C 200 330 420 400 620 350 C 820 300 1020 380 1200 330 L1200 800 L0 800 Z" fill="#14532d" opacity=".5"/>
+  <path d="M0 520 C 260 420 520 500 760 450 C 960 410 1080 470 1200 440 L1200 800 L0 800 Z" fill="#166534"/>
+  <g>
+    <g fill="#f8fafc">
+      <rect x="180" y="428" width="40" height="30"/>
+      <rect x="330" y="408" width="36" height="28"/>
+      <rect x="560" y="382" width="40" height="30"/>
+      <rect x="880" y="392" width="38" height="28"/>
+      <rect x="1030" y="422" width="42" height="30"/>
+    </g>
+    <g fill="#b91c1c">
+      <polygon points="174,430 200,408 226,430"/>
+      <polygon points="324,410 348,390 372,410"/>
+      <polygon points="554,384 580,362 606,384"/>
+      <polygon points="874,394 899,374 924,394"/>
+      <polygon points="1024,424 1051,402 1078,424"/>
+    </g>
+  </g>
+  <path d="M0 620 C 300 520 640 600 900 545 C 1040 516 1130 560 1200 545 L1200 800 L0 800 Z" fill="#15803d"/>
+  <g>
+    <g fill="#fffbeb">
+      <rect x="120" y="580" width="46" height="34"/>
+      <rect x="420" y="560" width="44" height="32"/>
+      <rect x="700" y="566" width="46" height="34"/>
+      <rect x="980" y="586" width="44" height="32"/>
+    </g>
+    <g fill="#9f1239">
+      <polygon points="113,582 143,556 173,582"/>
+      <polygon points="413,562 442,538 471,562"/>
+      <polygon points="693,568 723,542 753,568"/>
+      <polygon points="973,588 1002,564 1031,588"/>
+    </g>
+    <g fill="#166534">
+      <circle cx="250" cy="600" r="26"/>
+      <rect x="245" y="600" width="10" height="30" fill="#78350f"/>
+      <circle cx="560" cy="586" r="24"/>
+      <rect x="555" y="586" width="10" height="28" fill="#78350f"/>
+      <circle cx="860" cy="606" r="28"/>
+      <rect x="854" y="606" width="12" height="32" fill="#78350f"/>
+    </g>
+  </g>
+  <path d="M0 740 C 340 680 760 760 1200 700 L1200 800 L0 800 Z" fill="#166534"/>
+  <path d="M420 800 C 470 730 560 716 620 726 C 700 740 740 770 760 800 Z" fill="#a16207"/>
+  <path d="M300 800 L 520 726" stroke="#fef9c3" stroke-width="5" stroke-dasharray="22 20" fill="none"/>
+  <path d="M640 730 L 860 800" stroke="#fef9c3" stroke-width="5" stroke-dasharray="22 20" fill="none"/>
+</svg>
