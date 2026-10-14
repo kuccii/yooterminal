@@ -46,23 +46,29 @@ export const SEAT_LAYOUTS = [
   { id: '2x1', label: '2 + 1 · three seats per row' },
 ];
 
-const LAYOUT_LETTERS = {
-  '2x2': ['A', 'B', 'C', 'D'],
-  '2x1': ['A', 'B', 'C'],
-};
-
 export function seatRows(total, layout = '2x2') {
-  const letters = LAYOUT_LETTERS[layout] || LAYOUT_LETTERS['2x2'];
-  const perRow = letters.length;
+  const perRow = layout === '2x1' ? 3 : 4;
+  const bench = perRow === 4 ? 5 : 3;
   const seats = Number(total) || 0;
-  const rows = [];
-  for (let start = 0; start < seats; start += perRow) {
-    const row = [];
-    for (let offset = 0; offset < perRow && start + offset < seats; offset += 1) {
-      row.push(`${start / perRow + 1}${letters[offset]}`);
-    }
-    rows.push(row);
+  if (seats <= 0) return [];
+  if (seats <= bench) {
+    return [Array.from({ length: seats }, (_, index) => index + 1)];
   }
+  // The back row is always the full-width bench (it has a middle seat);
+  // everything in front is filled with regular rows, a short row if needed.
+  const fullRows = Math.floor((seats - bench) / perRow);
+  const extra = seats - bench - fullRows * perRow;
+  const rows = [];
+  let placed = 0;
+  const pushRow = (width) => {
+    const row = [];
+    for (let seat = placed + 1; seat <= placed + width; seat += 1) row.push(seat);
+    placed += width;
+    rows.push(row);
+  };
+  for (let index = 0; index < fullRows; index += 1) pushRow(perRow);
+  if (extra > 0) pushRow(extra);
+  pushRow(bench);
   return rows;
 }
 

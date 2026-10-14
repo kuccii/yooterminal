@@ -3,7 +3,6 @@ import { seatRows } from '@/lib/trips';
 import { cn } from '@/lib/utils';
 
 function SeatButton({ label, state, onToggle }) {
-  if (!label) return <span className="h-10 w-10" />;
   const disabled = state === 'taken';
   return (
     <button
@@ -19,6 +18,51 @@ function SeatButton({ label, state, onToggle }) {
     >
       {label}
     </button>
+  );
+}
+
+function seatState(label, taken, selected) {
+  if (taken.includes(label)) return 'taken';
+  if (selected.includes(label)) return 'selected';
+  return 'free';
+}
+
+function SeatPair({ labels, taken, selected, onToggle }) {
+  return labels.map((label) => (
+    <SeatButton key={label} label={label} state={seatState(label, taken, selected)} onToggle={onToggle} />
+  ));
+}
+
+function SeatRow({ row, taken, selected, onToggle }) {
+  if (row.length === 5) {
+    // Rear bench: 2 | 1 | 2 across the full width of the coach.
+    return (
+      <div className="flex items-center justify-center gap-1.5">
+        <SeatPair labels={row.slice(0, 2)} taken={taken} selected={selected} onToggle={onToggle} />
+        <SeatButton
+          label={row[2]}
+          state={seatState(row[2], taken, selected)}
+          onToggle={onToggle}
+        />
+        <SeatPair labels={row.slice(3)} taken={taken} selected={selected} onToggle={onToggle} />
+      </div>
+    );
+  }
+  if (row.length === 4) {
+    // Standard row: pair | aisle | pair.
+    return (
+      <div className="flex items-center justify-center gap-2">
+        <SeatPair labels={row.slice(0, 2)} taken={taken} selected={selected} onToggle={onToggle} />
+        <span className="w-6" aria-hidden="true" />
+        <SeatPair labels={row.slice(2)} taken={taken} selected={selected} onToggle={onToggle} />
+      </div>
+    );
+  }
+  // Short last row (or 2+1 layout): center the seats.
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <SeatPair labels={row} taken={taken} selected={selected} onToggle={onToggle} />
+    </div>
   );
 }
 
@@ -39,35 +83,13 @@ export default function SeatMap({ total = 0, layout = '2x2', taken = [], selecte
         </span>
       </div>
 
-      <div className="mx-auto w-full max-w-[280px]">
+      <div className="mx-auto w-full max-w-[300px]">
         <div className="mb-3 rounded-lg bg-muted py-1 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           Front · Driver
         </div>
         <div className="space-y-2">
           {rows.map((row, index) => (
-            <div key={index} className="flex items-center justify-center gap-2">
-              <SeatButton
-                label={row[0]}
-                state={taken.includes(row[0]) ? 'taken' : selected.includes(row[0]) ? 'selected' : 'free'}
-                onToggle={onToggle}
-              />
-              <SeatButton
-                label={row[1]}
-                state={taken.includes(row[1]) ? 'taken' : selected.includes(row[1]) ? 'selected' : 'free'}
-                onToggle={onToggle}
-              />
-              <span className="w-6 text-center text-[11px] text-muted-foreground">{index + 1}</span>
-              <SeatButton
-                label={row[2]}
-                state={taken.includes(row[2]) ? 'taken' : selected.includes(row[2]) ? 'selected' : 'free'}
-                onToggle={onToggle}
-              />
-              <SeatButton
-                label={row[3]}
-                state={taken.includes(row[3]) ? 'taken' : selected.includes(row[3]) ? 'selected' : 'free'}
-                onToggle={onToggle}
-              />
-            </div>
+            <SeatRow key={index} row={row} taken={taken} selected={selected} onToggle={onToggle} />
           ))}
         </div>
       </div>
