@@ -21,6 +21,9 @@ backend in `server/` (Express + SQLite + [Better Auth](https://better-auth.com))
 ## Run locally
 
 ```bash
+# The API refuses to start without BETTER_AUTH_SECRET (any non-empty value is fine in dev).
+# PowerShell: $env:BETTER_AUTH_SECRET='dev-secret'; npm run dev
+# bash:      BETTER_AUTH_SECRET=dev-secret npm run dev
 npm run seed    # first time only — creates the DB and demo data
 npm run dev     # API on :3001 + Vite on :5173 together
 ```
@@ -42,8 +45,8 @@ server console**. The hooks to replace live in `server/auth.js`
 
 ### Google sign-in (optional)
 
-Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` to enable it — see
-`.env.example`.
+Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in the **process environment**
+(the server does not load `.env` files) to enable it.
 
 ## Scripts
 
@@ -63,12 +66,16 @@ npm run build
 npm start           # serves dist/ and /api on :3001
 ```
 
-Set these in the environment:
+Set these in the **process environment** (e.g. pm2 env — the server does not
+load `.env` files, and a missing `BETTER_AUTH_SECRET` is a startup error):
 
-- `BETTER_AUTH_SECRET` — generate one (`openssl rand -base64 32`)
+- `BETTER_AUTH_SECRET` — required; generate one (`openssl rand -base64 32`)
 - `CLIENT_ORIGIN` — the public frontend origin (default `http://localhost:5173`)
+- `BETTER_AUTH_URL` — the public API origin (default `http://localhost:3001`)
 - `TRUSTED_ORIGINS` — extra comma-separated origins allowed to call the API
 - `PORT` — API/static port (default `3001`)
+- `FLW_PUBLIC_KEY` — Flutterwave public key (enables the checkout popup)
+- `FLW_SECRET_KEY` — Flutterwave secret key (server-side payment verification)
 
 ## Backend layout
 

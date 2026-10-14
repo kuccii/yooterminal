@@ -2,6 +2,13 @@ import { betterAuth } from 'better-auth';
 import { emailOTP } from 'better-auth/plugins';
 import { sqlite } from './db.js';
 
+if (!process.env.BETTER_AUTH_SECRET) {
+  console.error(
+    '[server] BETTER_AUTH_SECRET is not set. Set it in the process environment (pm2 env / shell) and restart. Refusing to start.',
+  );
+  process.exit(1);
+}
+
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const EXTRA_ORIGINS = (process.env.TRUSTED_ORIGINS || '')
   .split(',')
@@ -11,7 +18,7 @@ const EXTRA_ORIGINS = (process.env.TRUSTED_ORIGINS || '')
 export const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 export const auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET || 'dev-secret-change-me-set-BETTER_AUTH_SECRET',
+  secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3001',
   basePath: '/api/auth',
   // The Vite dev server proxies /api but keeps its own origin; allow it plus
