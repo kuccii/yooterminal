@@ -18,12 +18,23 @@ const STATUS_STYLES = {
   suspended: 'bg-destructive text-destructive-foreground',
 };
 
+const COUNTRIES = ['Uganda', 'Rwanda'];
+const DEFAULT_COLOR = '#0f766e';
+
+const slugify = (value) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
 export default function AdminOperatorsTab({ operators, setting, onChanged }) {
   const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ status: 'pending', commission_percent: '', owner_email: '', featured: false });
   const [busy, setBusy] = useState(false);
 
   const openEditor = (operator) => {
+    setCreating(false);
     setEditing(operator);
     setForm({
       status: operator.status || 'pending',
@@ -31,6 +42,20 @@ export default function AdminOperatorsTab({ operators, setting, onChanged }) {
       owner_email: operator.owner_email || '',
       featured: Boolean(operator.featured),
     });
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({
+      name: '',
+      country: 'Uganda',
+      brand_color: DEFAULT_COLOR,
+      status: 'pending',
+      commission_percent: '',
+      owner_email: '',
+      featured: false,
+    });
+    setCreating(true);
   };
 
   const syncDepartures = async (slug, payload) => {
@@ -56,6 +81,36 @@ export default function AdminOperatorsTab({ operators, setting, onChanged }) {
     await onChanged();
   };
 
+  const uniqueSlug = (base) => {
+    const taken = new Set(operators.map((operator) => operator.slug));
+    let slug = base || 'operator';
+    let suffix = 2;
+    while (taken.has(slug)) {
+      slug = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    return slug;
+  };
+
+  const create = async () => {
+    const name = (form.name || '').trim();
+    if (!name) return;
+    setBusy(true);
+    await db.entities.Operator.create({
+      name,
+      slug: uniqueSlug(slugify(name)),
+      country: form.country,
+      brand_color: form.brand_color || DEFAULT_COLOR,
+      status: form.status,
+      commission_percent: Number(form.commission_percent) || 0,
+      owner_email: (form.owner_email || '').trim(),
+      featured: form.featured,
+    });
+    setBusy(false);
+    setCreating(false);
+    await onChanged();
+  };
+
   const changeStatus = async (operator, status) => {
     await db.entities.Operator.update(operator.id, { status });
     await db.entities.Schedule.updateMany({ operator_slug: operator.slug }, { $set: { operator_status: status } });
@@ -71,10 +126,15 @@ export default function AdminOperatorsTab({ operators, setting, onChanged }) {
             Approve a company to put their departures on sale. Suspending hides every departure immediately.
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Platform default commission: {commissionPercentFor(null, setting, false)}% · cross-border{' '}
-          {commissionPercentFor(null, setting, true)}%
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs text-muted-foreground">
+            Platform default commission: {commissionPercentFor(null, setting, false)}% · cross-border{' '}
+            {commissionPercentFor(null, setting, true)}%
+          </p>
+          <Button size="sm" className="rounded-lg" onClick={openCreate}>
+            Add operator
+          </Button>
+        </div>
       </div>
 
       <div className="mt-5 overflow-x-auto">
@@ -145,13 +205,61 @@ export default function AdminOperatorsTab({ operators, setting, onChanged }) {
         </Table>
       </div>
 
-      <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+      <Dialog
+        open={Boolean(editing) || creating}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditing(null);
+            setCreating(false);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing?.name}</DialogTitle>
+            <DialogTitle>{creating ? 'Add operator' : editing?.name}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
+            {creating && (
+              <>
+                <FormField label="Company name" hint="Shown to passengers across the site.">
+                  <Input
+                    value={form.name || ''}
+                    placeholder="e.g. Coastal Explorer"
+                    onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  />
+                </FormField>
+
+                <FormField label="Country">
+                  <Select value={form.country} onValueChange={(value) => setForm({ ...form, country: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((country) => (
+                        <SelectItem key={country} value={country}>
+                          {country}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+
+                <FormField label="Brand color" hint="Used for the company avatar and badges.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={form.brand_color || DEFAULT_COLOR}
+                      onChange={(event) => setForm({ ...form, brand_color: event.target.value })}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-border bg-card p-1"
+                      aria-label="Brand color"
+                    />
+                    <span className="text-sm text-muted-foreground">{form.brand_color || DEFAULT_COLOR}</span>
+                  </div>
+                </FormField>
+              </>
+            )}
+
             <FormField label="Network status">
               <Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value })}>
                 <SelectTrigger>
@@ -180,7 +288,11 @@ export default function AdminOperatorsTab({ operators, setting, onChanged }) {
 
             <FormField
               label="Dashboard owner email"
-              hint="The person who signs in with this email gets this operator's dashboard."
+              hint={
+                creating
+                  ? 'That person signs up at /register with this email, then gets this company’s dashboard.'
+                  : "The person who signs in with this email gets this operator's dashboard."
+              }
             >
               <Input
                 type="email"
@@ -199,12 +311,24 @@ export default function AdminOperatorsTab({ operators, setting, onChanged }) {
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditing(null)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setEditing(null);
+                setCreating(false);
+              }}
+            >
               Cancel
             </Button>
-            <Button onClick={save} disabled={busy}>
-              {busy ? 'Saving…' : 'Save operator'}
-            </Button>
+            {creating ? (
+              <Button onClick={create} disabled={busy || !(form.name || '').trim()}>
+                {busy ? 'Adding…' : 'Add operator'}
+              </Button>
+            ) : (
+              <Button onClick={save} disabled={busy}>
+                {busy ? 'Saving…' : 'Save operator'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
