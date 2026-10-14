@@ -39,6 +39,7 @@ const ENTITIES = {
       commission_percent: 'number', platform_fee: 'number', operator_net: 'number',
       payment_provider: 'text', payment_ref: 'text', payment_tx_id: 'text', paid_at: 'text',
       validated: 'boolean', validated_at: 'text', validated_by: 'text', cancelled_at: 'text',
+      refund_status: 'text', refund_tx_id: 'text', cancelled_by: 'text',
     },
     access: { read: 'own', create: 'admin', update: 'creatorOrOwner', delete: 'admin' },
   },
@@ -148,9 +149,8 @@ const SYSTEM_COLUMNS = { id: 'text', created_date: 'text', created_by_id: 'text'
 const MAX_LIMIT = 1000;
 const DEFAULT_LIMIT = 100;
 
-// Fields a non-admin owner/operator may never change on update (value listed
-// here can only be written when it equals the stored value; 'cancelOnly'
-// allows status -> 'cancelled' and nothing else).
+// Fields a non-admin owner/operator may never change on update (a listed
+// field can only be written when it equals the stored value).
 const WRITE_PROTECTED = {
   Booking: {
     booking_ref: 'admin', trip_key: 'admin', route_slug: 'admin', travel_date: 'admin',
@@ -159,7 +159,7 @@ const WRITE_PROTECTED = {
     seats: 'admin', passengers: 'admin', passenger_count: 'admin', amount: 'admin', currency: 'admin',
     coupon_code: 'admin', discount_amount: 'admin', commission_percent: 'admin', platform_fee: 'admin',
     operator_net: 'admin', payment_provider: 'admin', payment_ref: 'admin', payment_tx_id: 'admin',
-    paid_at: 'admin', status: 'cancelOnly',
+    paid_at: 'admin', status: 'admin',
   },
   Operator: {
     status: 'admin', commission_percent: 'admin', owner_email: 'admin', slug: 'admin',
@@ -346,14 +346,8 @@ function assertFieldWriteAllowed(entityName, caller, payload, existing) {
   if (isAdmin(caller)) return;
   const rules = WRITE_PROTECTED[entityName];
   if (!rules) return;
-  for (const [field, rule] of Object.entries(rules)) {
+  for (const field of Object.keys(rules)) {
     if (payload[field] === undefined) continue;
-    if (rule === 'cancelOnly') {
-      if (payload[field] !== 'cancelled') {
-        throw new HttpError(403, 'Only admins can change this field');
-      }
-      continue;
-    }
     if (!sameValue(existing[field], payload[field])) {
       throw new HttpError(403, 'Only admins can change this field');
     }

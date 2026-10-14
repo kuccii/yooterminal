@@ -2,7 +2,7 @@ import db from '@/api/client';
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, MapPin } from 'lucide-react';
+import { CalendarDays, Loader2, MapPin } from 'lucide-react';
 
 import ETicket from '@/components/ETicket';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ export default function MyTrips() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
+  const [cancelling, setCancelling] = useState(null);
+  const [cancelNote, setCancelNote] = useState('');
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -31,7 +33,37 @@ export default function MyTrips() {
     return () => {
       active = false;
     };
-  }, [user?.id]);
+  }, [user?.id, cancelling]);
+
+  const cancelBooking = async (booking) => {
+    const ok = window.confirm(
+      `Cancel ticket ${booking.booking_ref} (${(booking.seats || []).join(', ')})? Seats are released and any eligible refund is requested automatically.`,
+    );
+    if (!ok) return;
+    setCancelling(booking.id);
+    setCancelNote('');
+    try {
+      const res = await fetch('/api/payments/cancel', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_ref: booking.booking_ref }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCancelNote(body.error || 'We could not cancel this ticket.');
+      } else if (body.refund_status === 'refunded') {
+        setCancelNote(`${booking.booking_ref} cancelled — your refund has been requested with the payment provider.`);
+      } else if (body.refund_status === 'refund_pending') {
+        setCancelNote(`${booking.booking_ref} cancelled — the refund is pending; our team will confirm it shortly.`);
+      } else {
+        setCancelNote(`${booking.booking_ref} cancelled.`);
+      }
+    } catch {
+      setCancelNote('We could not cancel this ticket. Please try again.');
+    }
+    setCancelling(null);
+  };
 
   const today = todayISO();
   const upcoming = bookings.filter((booking) => booking.travel_date >= today && booking.status !== 'cancelled');
@@ -78,6 +110,18 @@ export default function MyTrips() {
               <Button asChild variant="ghost" size="sm" className="rounded-lg">
                 <Link to={`/routes/${booking.route_slug}`}>Route info</Link>
               </Button>
+              {booking.status !== 'cancelled' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg text-destructive hover:bg-destructive/10"
+                  disabled={cancelling === booking.id}
+                  onClick={() => cancelBooking(booking)}
+                >
+                  {cancelling === booking.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                  Cancel ticket
+                </Button>
+              )}
             </div>
             {expanded === booking.id && (
               <div className="mt-4">
@@ -96,6 +140,9 @@ export default function MyTrips() {
       <p className="mt-1 text-sm text-muted-foreground">
         Every ticket you booked with {user?.email}. Open a trip to show your e-ticket at boarding.
       </p>
+      {cancelNote && (
+        <p className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground">{cancelNote}</p>
+      )}
 
       <Tabs defaultValue="upcoming" className="mt-8">
         <TabsList className="rounded-xl">

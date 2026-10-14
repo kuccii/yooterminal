@@ -12,9 +12,32 @@ import {
 } from './booking.js';
 
 const FLW_VERIFY_URL = 'https://api.flutterwave.com/v3/transactions';
+const FLW_REFUND_URL = 'https://api.flutterwave.com/v3/refunds';
+const CANCEL_CUTOFF_HOURS = 3;
+const KAMPALA_UTC_OFFSET = '+03:00';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function departureDate(booking) {
+  return new Date(`${booking.travel_date}T${booking.departure_time}:00${KAMPALA_UTC_OFFSET}`);
+}
+
+async function requestFlutterwaveRefund(transactionId, secret) {
+  let response;
+  try {
+    response = await fetch(FLW_REFUND_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transaction_id: transactionId }),
+    });
+  } catch {
+    return 'refund_pending';
+  }
+  const body = await response.json().catch(() => null);
+  if (response.ok && body && body.status === 'success') return 'refunded';
+  return 'refund_pending';
 }
 
 async function verifyFlutterwave(transactionId, secret) {
@@ -231,6 +254,63 @@ export function createPaymentsRouter() {
       paid_at: booking.paid_at,
       created_date: booking.created_date,
     });
+  });
+
+  router.post('/cancel', async (req, res) => {
+    const caller = await getCaller(req);
+    if (!caller) throw new HttpError(401, 'Sign in required');
+
+    const bookingRef = String((req.body || {}).booking_ref || '').trim();
+    const booking = sqlite.prepare('SELECT * FROM booking WHERE booking_ref = ?').get(bookingRef);
+    if (!booking) throw new HttpError(404, 'Booking not found');
+    if (booking.status !== 'paid') throw new HttpError(409, 'This booking cannot be cancelled');
+
+    const isAdminCaller = caller.role === 'admin';
+    const isOwner = booking.created_by_id === caller.id;
+    if (!isAdminCaller && !isOwner) throw new HttpError(403, 'You can only cancel your own bookings');
+
+    if (!isAdminCaller) {
+      const cutoffMs = departureDate(booking).getTime() - CANCEL_CUTOFF_HOURS * 60 * 60 * 1000;
+      if (Date.now() > cutoffMs) {
+        throw new HttpError(409, `Cancellations close ${CANCEL_CUTOFF_HOURS} hours before departure. Contact the operator for help.`);
+      }
+    }
+
+    const now = new Date().toISOString();
+    const seats = JSON.parse(booking.seats || '[]');
+
+    const cancelTx = sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `UPDATE booking SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?
+             WHERE id = ? AND status = 'paid'`,
+        )
+        .run(now, caller.id, booking.id);
+
+      const holds = sqlite
+        .prepare('SELECT * FROM departure_seat WHERE trip_key = ? AND travel_date = ?')
+        .all(booking.trip_key, booking.travel_date);
+      const drop = new Set(seats.map(String));
+      for (const hold of holds) {
+        const kept = (JSON.parse(hold.seats || '[]')).filter((seat) => !drop.has(String(seat)));
+        if (kept.length === 0) {
+          sqlite.prepare('DELETE FROM departure_seat WHERE id = ?').run(hold.id);
+        } else if (kept.length !== JSON.parse(hold.seats || '[]').length) {
+          sqlite
+            .prepare('UPDATE departure_seat SET seats = ?, seat_count = ? WHERE id = ?')
+            .run(JSON.stringify(kept), kept.length, hold.id);
+        }
+      }
+    });
+    cancelTx();
+
+    let refundStatus = 'not_refunded';
+    if (booking.payment_tx_id && process.env.FLW_SECRET_KEY) {
+      refundStatus = await requestFlutterwaveRefund(booking.payment_tx_id, process.env.FLW_SECRET_KEY);
+    }
+    sqlite.prepare('UPDATE booking SET refund_status = ? WHERE id = ?').run(refundStatus, booking.id);
+
+    res.json({ booking_ref: booking.booking_ref, status: 'cancelled', refund_status: refundStatus });
   });
 
   return router;
