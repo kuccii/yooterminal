@@ -6,6 +6,8 @@ import { toNodeHandler } from 'better-auth/node';
 import { auth, googleEnabled } from './auth.js';
 import { createEntityRouter, HttpError } from './entities.js';
 import { createPaymentsRouter } from './payments.js';
+import { createCouponsRouter } from './coupons.js';
+import { sqlite } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3001;
@@ -26,8 +28,18 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+app.get('/api/health', (req, res) => {
+  try {
+    sqlite.prepare('SELECT 1').get();
+    res.json({ ok: true, time: new Date().toISOString() });
+  } catch {
+    res.status(500).json({ ok: false });
+  }
+});
+
 app.use('/api/entities', createEntityRouter());
 app.use('/api/payments', createPaymentsRouter());
+app.use('/api/coupons', createCouponsRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {

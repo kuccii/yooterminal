@@ -71,7 +71,7 @@ const ENTITIES = {
       code: 'text', description: 'text', discount_type: 'text', discount_value: 'number',
       min_amount: 'number', currency: 'text', expires_at: 'text', active: 'boolean',
     },
-    access: { read: 'public' },
+    access: { read: 'admin' },
   },
   DepartureSeat: {
     table: 'departure_seat',
@@ -147,6 +147,30 @@ const SYSTEM_COLUMNS = { id: 'text', created_date: 'text', created_by_id: 'text'
 
 const MAX_LIMIT = 1000;
 const DEFAULT_LIMIT = 100;
+
+// Fields a non-admin owner/operator may never change on update (value listed
+// here can only be written when it equals the stored value; 'cancelOnly'
+// allows status -> 'cancelled' and nothing else).
+const WRITE_PROTECTED = {
+  Booking: {
+    booking_ref: 'admin', trip_key: 'admin', route_slug: 'admin', travel_date: 'admin',
+    origin_city: 'admin', destination_city: 'admin', operator_name: 'admin', operator_slug: 'admin',
+    operator_owner_email: 'admin', departure_time: 'admin', duration_minutes: 'admin', bus_class: 'admin',
+    seats: 'admin', passengers: 'admin', passenger_count: 'admin', amount: 'admin', currency: 'admin',
+    coupon_code: 'admin', discount_amount: 'admin', commission_percent: 'admin', platform_fee: 'admin',
+    operator_net: 'admin', payment_provider: 'admin', payment_ref: 'admin', payment_tx_id: 'admin',
+    paid_at: 'admin', status: 'cancelOnly',
+  },
+  Operator: {
+    status: 'admin', commission_percent: 'admin', owner_email: 'admin', slug: 'admin',
+    featured: 'admin', rating: 'admin',
+  },
+  Schedule: {
+    operator_status: 'admin', owner_email: 'admin', route_slug: 'admin',
+    operator_slug: 'admin', operator_name: 'admin',
+  },
+  Bus: { owner_email: 'admin', operator_slug: 'admin', operator_name: 'admin' },
+};
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -283,6 +307,11 @@ function parseSort(entity, sort) {
 // Authorization
 // ---------------------------------------------------------------------------
 function readScopeSql(entity, caller, params) {
+  if (entity.access.read === 'admin') {
+    if (!caller) throw new HttpError(401, 'Sign in required');
+    if (!isAdmin(caller)) throw new HttpError(403, 'Admin only');
+    return '';
+  }
   if (entity.access.read !== 'own') return '';
   if (isAdmin(caller)) return '';
   if (!caller) throw new HttpError(401, 'Sign in required');
@@ -305,6 +334,29 @@ function parseFilterParam(raw) {
     return parsed;
   } catch {
     throw new HttpError(400, 'Invalid filter JSON');
+  }
+}
+
+function sameValue(a, b) {
+  if (a !== null && typeof a === 'object') return JSON.stringify(a) === JSON.stringify(b);
+  return String(a ?? '') === String(b ?? '');
+}
+
+function assertFieldWriteAllowed(entityName, caller, payload, existing) {
+  if (isAdmin(caller)) return;
+  const rules = WRITE_PROTECTED[entityName];
+  if (!rules) return;
+  for (const [field, rule] of Object.entries(rules)) {
+    if (payload[field] === undefined) continue;
+    if (rule === 'cancelOnly') {
+      if (payload[field] !== 'cancelled') {
+        throw new HttpError(403, 'Only admins can change this field');
+      }
+      continue;
+    }
+    if (!sameValue(existing[field], payload[field])) {
+      throw new HttpError(403, 'Only admins can change this field');
+    }
   }
 }
 
@@ -401,9 +453,11 @@ function createHandler(entity) {
 
 function updateHandler(entity) {
   return (req, res) => {
-    const existing = sqlite.prepare(`SELECT * FROM "${entity.table}" WHERE id = ?`).get(req.params.id);
-    if (!existing) throw new HttpError(404, 'Not found');
+    const raw = sqlite.prepare(`SELECT * FROM "${entity.table}" WHERE id = ?`).get(req.params.id);
+    if (!raw) throw new HttpError(404, 'Not found');
+    const existing = decodeRow(entity, raw);
     assertWriteAllowed(entity, req.caller, { payload: req.body || {}, existing, action: 'update' });
+    assertFieldWriteAllowed(entity.name, req.caller, req.body || {}, existing);
 
     const payload = { ...(req.body || {}) };
     delete payload.id;
@@ -450,6 +504,7 @@ function updateManyHandler(entity) {
     for (const raw of rows) {
       const existing = decodeRow(entity, raw);
       assertWriteAllowed(entity, req.caller, { payload: $set, existing, action: 'update' });
+      assertFieldWriteAllowed(entity.name, req.caller, $set, existing);
       const sets = [];
       const values = [];
       for (const [field, kind] of Object.entries(entity.columns)) {
@@ -508,6 +563,8 @@ function aggregateHandler(entity) {
 }
 
 export function createEntityRouter() {
+  for (const [name, entity] of Object.entries(ENTITIES)) entity.name = name;
+
   const router = express.Router();
 
   router.use((req, res, next) => {

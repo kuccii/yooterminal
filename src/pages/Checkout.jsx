@@ -1,5 +1,3 @@
-import db from '@/api/client';
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CreditCard, Loader2, Lock, Smartphone } from 'lucide-react';
@@ -13,7 +11,7 @@ import { makeBookingRef, saveTicket } from '@/lib/bookingRef';
 import { Input } from '@/components/ui/input';
 import { discountFor } from '@/lib/commission';
 import { looksConfigured, payWithFlutterwave } from '@/lib/flutterwave';
-import { formatMoney, todayISO } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 import { buildTrip } from '@/lib/trips';
 
 export default function Checkout() {
@@ -109,18 +107,21 @@ export default function Checkout() {
     setCoupon(null);
     setCouponNote('');
 
-    const page = await db.entities.Coupon.filter({ code }, { limit: 1 });
-    const found = page.items?.[0] || null;
-
-    if (!found || !found.active) {
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, amount: draft.amount, currency: draft.currency }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCouponNote(body.error || 'We cannot apply that code.');
+      } else {
+        setCoupon(body);
+        setCouponNote(`${body.code} applied — you save ${formatMoney(discountFor(body, draft.amount), draft.currency)}.`);
+      }
+    } catch {
       setCouponNote('We cannot apply that code.');
-    } else if (found.expires_at && found.expires_at < todayISO()) {
-      setCouponNote('That code has expired.');
-    } else if (found.min_amount && draft.amount < found.min_amount) {
-      setCouponNote(`That code needs a booking of at least ${formatMoney(found.min_amount, draft.currency)}.`);
-    } else {
-      setCoupon(found);
-      setCouponNote(`${found.code} applied — you save ${formatMoney(discountFor(found, draft.amount), draft.currency)}.`);
     }
     setCheckingCoupon(false);
   };
@@ -216,7 +217,7 @@ export default function Checkout() {
             </div>
             <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
               <Lock className="h-3.5 w-3.5" />
-              Payments are processed securely by Flutterwave. BusLink never stores your card details.
+              Payments are processed securely by Flutterwave. YooTerminal never stores your card details.
             </p>
           </Card>
         </div>
