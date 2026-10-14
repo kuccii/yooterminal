@@ -1,7 +1,7 @@
 import db from '@/api/client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { BarChart3, BusFront, Image as ImageIcon, LayoutDashboard, Map, ShieldCheck, Users } from 'lucide-react';
+import { BarChart3, BusFront, Image as ImageIcon, LayoutDashboard, Map, ShieldCheck, UserCog, Users } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -12,9 +12,11 @@ import AdminOperationsTab from '@/components/admin/AdminOperationsTab';
 import AdminOverviewTab from '@/components/admin/AdminOverviewTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminRoutesTab from '@/components/admin/AdminRoutesTab';
+import AdminUsersTab from '@/components/admin/AdminUsersTab';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'users', label: 'Users', icon: UserCog },
   { id: 'operators', label: 'Operators', icon: Users },
   { id: 'routes', label: 'Routes & stops', icon: Map },
   { id: 'operations', label: 'Fleet & departures', icon: BusFront },
@@ -98,6 +100,8 @@ export default function AdminPanel() {
             onNavigate={setActive}
           />
         );
+      case 'users':
+        return <AdminUsersTab currentUserId={user.id} />;
       case 'routes':
         return <AdminRoutesTab routes={state.routes} cities={state.cities} onChanged={load} />;
       case 'operations':

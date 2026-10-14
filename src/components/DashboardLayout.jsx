@@ -20,6 +20,12 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 
+const ROLE_LABELS = {
+  admin: 'Admin',
+  operator: 'Operator',
+  user: 'User',
+};
+
 const initialsFor = (user) => {
   const source = user?.full_name || user?.email || '';
   const parts = source.split(/[\s@._-]+/).filter(Boolean).slice(0, 2);
@@ -32,7 +38,7 @@ function DashboardShell({ items, active, onNavigate, title, subtitle, user, chil
 
   const activeItem = items.find((item) => item.id === active);
   const heading = title || activeItem?.label || '';
-  const roleLabel = user?.role === 'admin' ? 'Admin' : 'Operator';
+  const roleLabel = ROLE_LABELS[user?.role] || 'User';
   const displayName = user?.full_name || user?.email || 'Account';
 
   const handleNavigate = (id) => {

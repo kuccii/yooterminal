@@ -10,6 +10,7 @@ import {
   quoteBooking,
   sortedSeats,
 } from './booking.js';
+import { writeAuditLog } from './audit.js';
 
 const FLW_VERIFY_URL = 'https://api.flutterwave.com/v3/transactions';
 const FLW_REFUND_URL = 'https://api.flutterwave.com/v3/refunds';
@@ -309,6 +310,15 @@ export function createPaymentsRouter() {
       refundStatus = await requestFlutterwaveRefund(booking.payment_tx_id, process.env.FLW_SECRET_KEY);
     }
     sqlite.prepare('UPDATE booking SET refund_status = ? WHERE id = ?').run(refundStatus, booking.id);
+
+    writeAuditLog({
+      actorId: caller.id,
+      action: 'booking.cancel',
+      entity: 'booking',
+      entityId: booking.id,
+      before: { status: booking.status, refund_status: booking.refund_status || null },
+      after: { status: 'cancelled', refund_status: refundStatus },
+    });
 
     res.json({ booking_ref: booking.booking_ref, status: 'cancelled', refund_status: refundStatus });
   });

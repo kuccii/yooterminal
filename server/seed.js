@@ -6,6 +6,8 @@ const now = new Date().toISOString();
 const newId = () => crypto.randomUUID();
 const json = (value) => JSON.stringify(value);
 
+const ROLE_RANK = { user: 0, operator: 1, admin: 2 };
+
 function clearTable(table) {
   sqlite.prepare(`DELETE FROM "${table}"`).run();
 }
@@ -21,10 +23,14 @@ function insert(table, row) {
 async function ensureUser({ email, password, name, role }) {
   const existing = sqlite.prepare('SELECT id, role FROM user WHERE email = ?').get(email);
   if (existing) {
-    if (existing.role !== role) {
+    const existingRank = ROLE_RANK[existing.role] ?? 0;
+    const wantedRank = ROLE_RANK[role] ?? 0;
+    if (wantedRank > existingRank) {
       sqlite.prepare('UPDATE user SET role = ? WHERE id = ?').run(role, existing.id);
+      console.log(`[seed] User ${email} already exists (${existing.role}) - promoted to ${role}.`);
+    } else {
+      console.log(`[seed] User ${email} already exists (${existing.role}) - leaving as is.`);
     }
-    console.log(`[seed] User ${email} already exists (${existing.role}) - leaving as is.`);
     return existing.id;
   }
   const result = await auth.api.signUpEmail({ body: { email, password, name } });
@@ -190,8 +196,8 @@ async function seed() {
   console.log('[seed] Seeding database...');
 
   await ensureUser({ email: 'admin@example.com', password: 'admin1234', name: 'Platform Admin', role: 'admin' });
-  await ensureUser({ email: 'operator@example.com', password: 'operator1234', name: 'Savannah Ops', role: 'user' });
-  await ensureUser({ email: 'kigali.ops@example.com', password: 'operator1234', name: 'Kigali Ops', role: 'user' });
+  await ensureUser({ email: 'operator@example.com', password: 'operator1234', name: 'Savannah Ops', role: 'operator' });
+  await ensureUser({ email: 'kigali.ops@example.com', password: 'operator1234', name: 'Kigali Ops', role: 'operator' });
 
   for (const table of ['departure_seat', 'booking', 'coupon', 'review', 'banner', 'schedule', 'bus', 'route', 'operator', 'city', 'platform_setting']) {
     clearTable(table);

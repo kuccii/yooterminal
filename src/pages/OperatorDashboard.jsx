@@ -57,11 +57,13 @@ export default function OperatorDashboard() {
 
   const email = (user?.email || '').toLowerCase();
   const isAdmin = user?.role === 'admin';
+  const isOperatorRole = user?.role === 'operator';
 
   const options = useMemo(() => {
     if (isAdmin) return state.operators;
+    if (!isOperatorRole && user?.role !== 'user') return [];
     return state.operators.filter((operator) => operator.owner_email && operator.owner_email.toLowerCase() === email);
-  }, [isAdmin, state.operators, email]);
+  }, [isAdmin, isOperatorRole, state.operators, email, user?.role]);
 
   if (isLoadingAuth || state.loading) {
     return (

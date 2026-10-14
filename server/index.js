@@ -7,6 +7,7 @@ import { auth, googleEnabled } from './auth.js';
 import { createEntityRouter, HttpError } from './entities.js';
 import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
+import { createAdminRouter } from './admin.js';
 import { sqlite } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/entities', createEntityRouter());
 app.use('/api/payments', createPaymentsRouter());
 app.use('/api/coupons', createCouponsRouter());
+app.use('/api/admin', createAdminRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {
