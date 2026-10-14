@@ -8,6 +8,7 @@ import { createEntityRouter, HttpError } from './entities.js';
 import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
 import { createAdminRouter } from './admin.js';
+import { sendDepartureReminder } from './notifications.js';
 import { sqlite } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,33 @@ app.use((err, req, res, next) => {
   console.error('[server]', err);
   return res.status(500).json({ error: 'Internal server error' });
 });
+
+function tomorrowISO() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function runDepartureReminders() {
+  try {
+    const rows = sqlite
+      .prepare(
+        `SELECT * FROM booking
+          WHERE travel_date = ? AND status = 'paid' AND COALESCE(reminder_sent, 0) = 0`,
+      )
+      .all(tomorrowISO());
+    for (const booking of rows) {
+      sqlite.prepare('UPDATE booking SET reminder_sent = 1 WHERE id = ?').run(booking.id);
+      void sendDepartureReminder(booking);
+    }
+  } catch (error) {
+    console.error('[server] Departure reminder run failed:', error);
+  }
+}
+
+const REMINDER_INTERVAL_MS = 60 * 60 * 1000;
+setInterval(runDepartureReminders, REMINDER_INTERVAL_MS);
+runDepartureReminders();
 
 app.listen(PORT, () => {
   console.log(`[server] API listening on http://localhost:${PORT}`);

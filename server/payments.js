@@ -11,6 +11,7 @@ import {
   sortedSeats,
 } from './booking.js';
 import { writeAuditLog } from './audit.js';
+import { sendBookingConfirmation, sendCancellation } from './notifications.js';
 
 const FLW_VERIFY_URL = 'https://api.flutterwave.com/v3/transactions';
 const FLW_REFUND_URL = 'https://api.flutterwave.com/v3/refunds';
@@ -223,6 +224,8 @@ export function createPaymentsRouter() {
       return sqlite.prepare('SELECT * FROM booking WHERE id = ?').get(bookingId);
     })();
 
+    void sendBookingConfirmation(booking);
+
     res.json({
       id: booking.id,
       booking_ref: booking.booking_ref,
@@ -319,6 +322,8 @@ export function createPaymentsRouter() {
       before: { status: booking.status, refund_status: booking.refund_status || null },
       after: { status: 'cancelled', refund_status: refundStatus },
     });
+
+    void sendCancellation({ ...booking, refund_status: refundStatus });
 
     res.json({ booking_ref: booking.booking_ref, status: 'cancelled', refund_status: refundStatus });
   });

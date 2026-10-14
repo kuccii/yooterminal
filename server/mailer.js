@@ -20,7 +20,7 @@ export function emailConfigured() {
 }
 
 /** Send mail when SMTP is configured; otherwise warn (never throw). */
-export async function sendMailSafe({ to, subject, text }) {
+export async function sendMailSafe({ to, subject, text, html = undefined }) {
   const tx = getTransporter();
   if (!tx) {
     console.warn(`[mailer] Email not delivered to ${to} — SMTP is not configured (set SMTP_HOST / SMTP_USER / SMTP_PASS). Subject: ${subject}`);
@@ -32,6 +32,7 @@ export async function sendMailSafe({ to, subject, text }) {
       to,
       subject,
       text,
+      ...(html ? { html } : {}),
     });
     return true;
   } catch (error) {

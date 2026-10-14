@@ -37,11 +37,13 @@ Seeded accounts (passwords printed by `npm run seed`):
 | Admin    | admin@example.com      | admin1234     |
 | Operator | operator@example.com   | operator1234  |
 
-### Email delivery (dev mode)
+### Email delivery
 
-There is no SMTP yet: OTP codes and password-reset links are **printed to the API
-server console**. The hooks to replace live in `server/auth.js`
-(`sendVerificationOTP`, `sendResetPassword`).
+Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` and `SMTP_PASS` (and optionally
+`SMTP_FROM`) in the **process environment** to deliver real email: OTP sign-in
+codes, password resets, booking confirmations, cancellation notices and
+departure reminders (sent the day before travel). Without SMTP, every message
+is printed to the API server console instead — nothing is ever lost silently.
 
 ### Google sign-in (optional)
 
@@ -76,17 +78,26 @@ load `.env` files, and a missing `BETTER_AUTH_SECRET` is a startup error):
 - `PORT` — API/static port (default `3001`)
 - `FLW_PUBLIC_KEY` — Flutterwave public key (enables the checkout popup)
 - `FLW_SECRET_KEY` — Flutterwave secret key (server-side payment verification)
+- `SMTP_HOST` — SMTP server hostname (email disabled when unset)
+- `SMTP_PORT` — SMTP port (default `587`; `465` enables implicit TLS)
+- `SMTP_USER` — SMTP username
+- `SMTP_PASS` — SMTP password
+- `SMTP_FROM` — From address (defaults to `SMTP_USER`)
 
 ## Backend layout
 
 ```
 server/
-  index.js    Express entry: /api/auth, /api/entities, static dist/
-  auth.js     Better Auth config (email/password, OTP, reset, Google)
-  entities.js Entity registry + filter/sort/aggregate engine + access rules
-  db.js       SQLite connection + schema (auth tables + app tables)
-  seed.js     Demo dataset + seeded users
-  data/       app.db lives here (gitignored)
+  index.js         Express entry: /api/auth, /api/entities, static dist/, reminder runner
+  auth.js          Better Auth config (email/password, OTP, reset, Google)
+  admin.js         Admin-only user list + role management (writes audit_log)
+  audit.js         audit_log writer shared by admin + payments
+  booking.js       Trip quoting, seat availability, coupon rules
+  notifications.js Transactional emails (confirmation, cancellation, reminder)
+  entities.js      Entity registry + filter/sort/aggregate engine + access rules
+  db.js            SQLite connection + schema (auth tables + app tables)
+  seed.js          Demo dataset + seeded users
+  data/            app.db lives here (gitignored)
 ```
 
 Access rules mirror the original app: most content is admin-written and publicly
