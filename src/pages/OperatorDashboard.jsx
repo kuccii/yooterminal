@@ -5,6 +5,7 @@ import { BusFront, LayoutDashboard } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import OperatorAvatar from '@/components/OperatorAvatar';
+import OperatorBookingsTab from '@/components/operator/OperatorBookingsTab';
 import OperatorEarningsTab from '@/components/operator/OperatorEarningsTab';
 import OperatorFleetTab from '@/components/operator/OperatorFleetTab';
 import OperatorTimetableTab from '@/components/operator/OperatorTimetableTab';
@@ -124,6 +125,7 @@ export default function OperatorDashboard() {
         <TabsList className="flex h-auto flex-wrap justify-start gap-1">
           <TabsTrigger value="timetable">Timetable &amp; fares</TabsTrigger>
           <TabsTrigger value="fleet">Fleet</TabsTrigger>
+          <TabsTrigger value="bookings">Booked tickets</TabsTrigger>
           <TabsTrigger value="validation">Ticket validation</TabsTrigger>
           <TabsTrigger value="earnings">Earnings</TabsTrigger>
         </TabsList>
@@ -133,6 +135,9 @@ export default function OperatorDashboard() {
         </TabsContent>
         <TabsContent value="fleet" className="mt-6">
           <OperatorFleetTab operator={operator} />
+        </TabsContent>
+        <TabsContent value="bookings" className="mt-6">
+          <OperatorBookingsTab operator={operator} />
         </TabsContent>
         <TabsContent value="validation" className="mt-6">
           <OperatorValidationTab operator={operator} user={user} />

@@ -125,11 +125,73 @@ const COUPONS = [
   { code: 'WELCOME10', description: '10% off your first booking', discount_type: 'percent', discount_value: 10, min_amount: 10000, active: 1 },
 ];
 
+const dayISO = (offset) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().slice(0, 10);
+};
+
+// Demo tickets so the operator "Booked tickets" tab has data on a fresh seed.
+// Dates shift with every run, keeping the upcoming/past/cancelled views valid.
+const BOOKINGS = [
+  {
+    booking_ref: 'BLDEMO42', status: 'paid',
+    trip_key: `kampala-kigali~rwenzori-express~07:00~${dayISO(7)}`,
+    route_slug: 'kampala-kigali', travel_date: dayISO(7),
+    origin_city: 'Kampala', destination_city: 'Kigali',
+    operator_name: 'Rwenzori Express', operator_slug: 'rwenzori-express', operator_owner_email: 'operator@example.com',
+    departure_time: '07:00', duration_minutes: 480, bus_class: 'VIP',
+    seats: json([12, 13]), passengers: json([{ name: 'Amina K.' }, { name: 'Peter O.' }]), passenger_count: 2,
+    contact_name: 'Amina K.', contact_email: 'amina@example.com', contact_phone: '+256 700 111 222',
+    amount: 90000, currency: 'UGX', commission_percent: 12, platform_fee: 10800, operator_net: 79200,
+    payment_provider: 'flutterwave', payment_ref: 'BL-DEMO-42', paid_at: now, validated: 0,
+  },
+  {
+    booking_ref: 'BLDEMO77', status: 'paid',
+    trip_key: `kigali-musanze~kigali-connect~09:00~${dayISO(3)}`,
+    route_slug: 'kigali-musanze', travel_date: dayISO(3),
+    origin_city: 'Kigali', destination_city: 'Musanze',
+    operator_name: 'Kigali Connect', operator_slug: 'kigali-connect', operator_owner_email: 'kigali.ops@example.com',
+    departure_time: '09:00', duration_minutes: 120, bus_class: 'VIP',
+    seats: json([5]), passengers: json([{ name: 'Patrick N.' }]), passenger_count: 1,
+    contact_name: 'Patrick N.', contact_email: 'patrick@example.com', contact_phone: '+250 780 555 666',
+    amount: 4000, currency: 'RWF', commission_percent: 14, platform_fee: 560, operator_net: 3440,
+    payment_provider: 'flutterwave', payment_ref: 'BL-DEMO-77', paid_at: now, validated: 0,
+  },
+  {
+    booking_ref: 'BLDEMO19', status: 'paid',
+    trip_key: `kampala-entebbe~rwenzori-express~08:00~${dayISO(-14)}`,
+    route_slug: 'kampala-entebbe', travel_date: dayISO(-14),
+    origin_city: 'Kampala', destination_city: 'Entebbe',
+    operator_name: 'Rwenzori Express', operator_slug: 'rwenzori-express', operator_owner_email: 'operator@example.com',
+    departure_time: '08:00', duration_minutes: 70, bus_class: 'Standard',
+    seats: json([7]), passengers: json([{ name: 'Grace U.' }]), passenger_count: 1,
+    contact_name: 'Grace U.', contact_email: 'grace@example.com', contact_phone: '+256 700 333 444',
+    amount: 6000, currency: 'UGX', commission_percent: 12, platform_fee: 720, operator_net: 5280,
+    payment_provider: 'flutterwave', payment_ref: 'BL-DEMO-19', paid_at: now,
+    validated: 1, validated_at: now, validated_by: 'Rwenzori Express',
+  },
+  {
+    booking_ref: 'BLDEMO63', status: 'cancelled',
+    trip_key: `kampala-kigali~savannah-voyages~21:00~${dayISO(2)}`,
+    route_slug: 'kampala-kigali', travel_date: dayISO(2),
+    origin_city: 'Kampala', destination_city: 'Kigali',
+    operator_name: 'Savannah Voyages', operator_slug: 'savannah-voyages', operator_owner_email: 'operator@example.com',
+    departure_time: '21:00', duration_minutes: 510, bus_class: 'Executive',
+    seats: json([21]), passengers: json([{ name: 'Joseph M.' }]), passenger_count: 1,
+    contact_name: 'Joseph M.', contact_email: 'joseph@example.com', contact_phone: '+256 700 999 888',
+    amount: 50000, currency: 'UGX', commission_percent: 15, platform_fee: 7500, operator_net: 42500,
+    payment_provider: 'flutterwave', payment_ref: 'BL-DEMO-63', paid_at: now,
+    validated: 0, cancelled_at: now,
+  },
+];
+
 async function seed() {
   console.log('[seed] Seeding database...');
 
   await ensureUser({ email: 'admin@example.com', password: 'admin1234', name: 'Platform Admin', role: 'admin' });
   await ensureUser({ email: 'operator@example.com', password: 'operator1234', name: 'Savannah Ops', role: 'user' });
+  await ensureUser({ email: 'kigali.ops@example.com', password: 'operator1234', name: 'Kigali Ops', role: 'user' });
 
   for (const table of ['departure_seat', 'booking', 'coupon', 'review', 'banner', 'schedule', 'bus', 'route', 'operator', 'city', 'platform_setting']) {
     clearTable(table);
@@ -153,6 +215,7 @@ async function seed() {
   for (const review of REVIEWS) insert('review', { ...review, id: newId(), created_date: now });
   for (const setting of PLATFORM_SETTINGS) insert('platform_setting', { ...setting, id: newId(), created_date: now });
   for (const coupon of COUPONS) insert('coupon', { ...coupon, id: newId(), created_date: now });
+  for (const booking of BOOKINGS) insert('booking', { ...booking, id: newId(), created_date: now });
 
   console.log(`[seed] Done - ${CITIES.length} cities, ${ROUTES.length} routes, ${SCHEDULES.length} schedules, ${OPERATORS.length} operators.`);
   console.log('[seed] Admin login: admin@example.com / admin1234 - Operator login: operator@example.com / operator1234');

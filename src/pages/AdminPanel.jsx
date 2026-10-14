@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AdminContentTab from '@/components/admin/AdminContentTab';
 import AdminOperatorsTab from '@/components/admin/AdminOperatorsTab';
+import AdminOperationsTab from '@/components/admin/AdminOperationsTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminRoutesTab from '@/components/admin/AdminRoutesTab';
 
@@ -74,6 +75,7 @@ export default function AdminPanel() {
         <TabsList className="flex h-auto flex-wrap justify-start gap-1">
           <TabsTrigger value="operators">Operators</TabsTrigger>
           <TabsTrigger value="routes">Routes &amp; stops</TabsTrigger>
+          <TabsTrigger value="operations">Fleet &amp; departures</TabsTrigger>
           <TabsTrigger value="content">Banners, coupons &amp; reviews</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
@@ -83,6 +85,9 @@ export default function AdminPanel() {
         </TabsContent>
         <TabsContent value="routes" className="mt-6">
           <AdminRoutesTab routes={state.routes} cities={state.cities} onChanged={load} />
+        </TabsContent>
+        <TabsContent value="operations" className="mt-6">
+          <AdminOperationsTab operators={state.operators} routes={state.routes} />
         </TabsContent>
         <TabsContent value="content" className="mt-6">
           <AdminContentTab />

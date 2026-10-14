@@ -14,6 +14,29 @@ export const sqlite = new Database(dbPath);
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
 
+// SQLite REGEXP hook backing the generic $regex filter in entities.js.
+// The pattern param is JSON-encoded ({ pattern, flags }) when it comes from
+// buildWhere; anything else is treated as a plain literal pattern.
+sqlite.function('regexp', { deterministic: true }, (pattern, value) => {
+  if (value === null || value === undefined) return 0;
+  let source = String(pattern ?? '');
+  let flags = '';
+  try {
+    const parsed = JSON.parse(source);
+    if (parsed && typeof parsed === 'object') {
+      source = String(parsed.pattern ?? '');
+      flags = typeof parsed.flags === 'string' ? parsed.flags.replace(/[^imsuy]/g, '') : '';
+    }
+  } catch {
+    // not JSON — use the raw pattern as-is
+  }
+  try {
+    return new RegExp(source, flags).test(String(value)) ? 1 : 0;
+  } catch {
+    return 0;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Better Auth core schema (official SQLite dialect)
 // ---------------------------------------------------------------------------

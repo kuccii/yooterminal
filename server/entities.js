@@ -188,7 +188,8 @@ function encodeValue(kind, value) {
 }
 
 // ---------------------------------------------------------------------------
-// Filter -> SQL. Supports equality, $in, $ne, $gt/$gte/$lt/$lte and $or.
+// Filter -> SQL. Supports equality, $in, $ne, $gt/$gte/$lt/$lte, $regex
+// (with optional $options, e.g. { $regex: 'BL', $options: 'i' }) and $or.
 // ---------------------------------------------------------------------------
 function buildWhere(entity, filter, params) {
   if (!filter || typeof filter !== 'object') return '';
@@ -238,6 +239,18 @@ function buildWhere(entity, filter, params) {
             clauses.push(`"${key}" ${sqlOp} ?`);
             break;
           }
+          case '$regex': {
+            // SQLite resolves `"col" REGEXP ?` to the regexp() hook in db.js.
+            // Pattern + $options flags travel as one JSON-encoded param so no
+            // separator characters can collide with user input.
+            const flags = typeof raw.$options === 'string' ? raw.$options.replace(/[^imsuy]/g, '') : '';
+            params.push(JSON.stringify({ pattern: opValue === null || opValue === undefined ? '' : String(opValue), flags }));
+            clauses.push(`"${key}" REGEXP ?`);
+            break;
+          }
+          case '$options':
+            // Only meaningful alongside $regex, which consumes it above.
+            break;
           default:
             throw new HttpError(400, `Unsupported filter operator: ${op}`);
         }
