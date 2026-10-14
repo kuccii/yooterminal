@@ -81,6 +81,7 @@ const ENTITIES = {
       trip_key: 'text', travel_date: 'text', route_slug: 'text', operator_slug: 'text',
       operator_name: 'text', departure_time: 'text', seats: 'json', seat_count: 'number',
     },
+    hidden: ['holder_id', 'created_by_id'],
     access: { read: 'public', create: 'admin', update: 'admin', delete: 'admin' },
   },
   Operator: {
@@ -199,6 +200,7 @@ function decodeRow(entity, row) {
       }
     } else if (kind === 'number') out[field] = Number(value);
   }
+  for (const field of entity.hidden || []) delete out[field];
   return out;
 }
 

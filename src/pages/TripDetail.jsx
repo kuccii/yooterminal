@@ -1,8 +1,8 @@
 import db from '@/api/client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Info, MapPin } from 'lucide-react';
+import { ArrowLeft, Info, MapPin, Timer } from 'lucide-react';
 
 import SeatMap from '@/components/SeatMap';
 import TripSummary from '@/components/TripSummary';
@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/lib/AuthContext';
 import { buildTrip, parseTripKey } from '@/lib/trips';
 import { formatMoney } from '@/lib/format';
 
@@ -20,6 +21,7 @@ export default function TripDetail() {
   const { tripKey = '' } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const wanted = Number(params.get('passengers') || 1);
 
   const parsed = useMemo(() => parseTripKey(tripKey), [tripKey]);
@@ -29,6 +31,12 @@ export default function TripDetail() {
   const [passengers, setPassengers] = useState({});
   const [contact, setContact] = useState({ name: '', email: '', phone: '' });
   const [error, setError] = useState('');
+  const [hold, setHold] = useState(null);
+  const [holdBusy, setHoldBusy] = useState(false);
+  const [holdNote, setHoldNote] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+  const holdSeq = useRef(0);
+  const holdRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -55,7 +63,10 @@ export default function TripDetail() {
 
       const [routePage, heldPage] = await Promise.all([
         db.entities.Route.filter({ slug: parsed.route_slug }, { limit: 1 }),
-        db.entities.DepartureSeat.filter({ trip_key: tripKey }, { limit: 200, fields: ['seats'] }),
+        db.entities.DepartureSeat.filter(
+          { trip_key: tripKey },
+          { limit: 200, fields: ['seats', 'expires_at'] }
+        ),
       ]);
       const route = routePage.items?.[0] || null;
 
@@ -74,7 +85,9 @@ export default function TripDetail() {
         schedule,
         route,
         cities,
-        taken: (heldPage.items || []).flatMap((record) => record.seats || []),
+        taken: (heldPage.items || [])
+          .filter((item) => !item.expires_at || Number(item.expires_at) > Date.now())
+          .flatMap((record) => record.seats || []),
       });
     })();
 
@@ -84,6 +97,72 @@ export default function TripDetail() {
   }, [parsed.route_slug, parsed.operator_slug, parsed.departure_time, tripKey]);
 
   const trip = data.schedule ? buildTrip(data.schedule, parsed.travel_date) : null;
+
+  const seatsKey = selected.join(',');
+
+  useEffect(() => {
+    if (!user?.id || !tripKey) {
+      holdRef.current = null;
+      setHold(null);
+      return undefined;
+    }
+    if (!selected.length) {
+      setHold(null);
+      if (holdRef.current) {
+        holdRef.current = null;
+        fetch('/api/seats/hold', {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trip_key: tripKey }),
+        }).catch(() => {});
+      }
+      return undefined;
+    }
+    let active = true;
+    const seq = ++holdSeq.current;
+    setHoldBusy(true);
+    fetch('/api/seats/hold', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trip_key: tripKey, seats: selected }),
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!active) return;
+        if (!response.ok) {
+          holdRef.current = null;
+          setHold(null);
+          setHoldNote(body.error || 'We could not hold those seats.');
+          return;
+        }
+        if (seq !== holdSeq.current) return;
+        const next = { expiresAt: Number(body.expires_at), seats: body.seats || selected };
+        holdRef.current = next;
+        setHold(next);
+        setHoldNote('');
+      })
+      .catch(() => {
+        if (active) setHoldNote('We could not reach the seat service — check your connection and try again.');
+      })
+      .finally(() => {
+        if (active) setHoldBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, tripKey, seatsKey]);
+
+  useEffect(() => {
+    if (!hold) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [hold]);
+
+  const holdActive = Boolean(hold && now < hold.expiresAt);
+  const holdRemaining = hold ? Math.max(0, hold.expiresAt - now) : 0;
 
   const toggleSeat = (label) => {
     if (selected.includes(label)) {
@@ -105,7 +184,7 @@ export default function TripDetail() {
   const updatePassenger = (seat, field, value) =>
     setPassengers((previous) => ({ ...previous, [seat]: { ...previous[seat], [field]: value } }));
 
-  const proceed = () => {
+  const proceed = async () => {
     if (selected.length !== wanted) {
       setError(`Please choose ${wanted} seat${wanted > 1 ? 's' : ''} on the seat map.`);
       return;
@@ -122,7 +201,36 @@ export default function TripDetail() {
       setError('Enter a valid email address.');
       return;
     }
+    if (!user?.id) {
+      setError('Sign in to hold your seats and continue to payment.');
+      return;
+    }
     setError('');
+    if (!holdActive) {
+      setHoldBusy(true);
+      try {
+        const response = await fetch('/api/seats/hold', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trip_key: tripKey, seats: selected }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setError(body.error || 'We could not hold your seats. Please try again.');
+          return;
+        }
+        const next = { expiresAt: Number(body.expires_at), seats: body.seats || selected };
+        holdRef.current = next;
+        setHold(next);
+        setHoldNote('');
+      } catch {
+        setError('We could not hold your seats. Please check your connection and try again.');
+        return;
+      } finally {
+        setHoldBusy(false);
+      }
+    }
     const draft = {
       trip_key: trip.key,
       route_slug: data.schedule.route_slug,
@@ -179,6 +287,10 @@ export default function TripDetail() {
   const originCity = data.cities[data.route?.origin_slug];
   const destinationCity = data.cities[data.route?.destination_slug];
   const total = Number(trip.price) * (selected.length || wanted);
+  const activeHoldSeats = holdActive ? hold.seats || [] : [];
+  const displayTaken = data.taken.filter((seat) => !activeHoldSeats.includes(seat));
+  const holdMinutes = Math.floor(holdRemaining / 60000);
+  const holdSeconds = Math.floor((holdRemaining % 60000) / 1000);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -201,15 +313,23 @@ export default function TripDetail() {
           <Card className="rounded-2xl border-border p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">Choose your seats</h2>
-              <span className="text-sm text-muted-foreground">
-                {selected.length} of {wanted} selected
-              </span>
+              <div className="flex items-center gap-2">
+                {holdActive && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                    <Timer className="h-3.5 w-3.5" />
+                    Held for {holdMinutes}:{String(holdSeconds).padStart(2, '0')}
+                  </span>
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {selected.length} of {wanted} selected
+                </span>
+              </div>
             </div>
             <div className="mt-4">
               <SeatMap
                 total={schedule.seats_total}
                 layout={schedule.seat_layout || '2x2'}
-                taken={data.taken}
+                taken={displayTaken}
                 selected={selected}
                 onToggle={toggleSeat}
               />
@@ -343,9 +463,19 @@ export default function TripDetail() {
                 <span className="font-medium">Total</span>
                 <span className="font-display text-2xl font-extrabold">{formatMoney(total, schedule.currency)}</span>
               </div>
-              <Button className="mt-4 h-12 w-full rounded-xl text-base font-semibold" onClick={proceed}>
-                Continue to payment
+              <Button
+                className="mt-4 h-12 w-full rounded-xl text-base font-semibold"
+                onClick={proceed}
+                disabled={holdBusy}
+              >
+                {holdBusy ? 'Holding your seats…' : 'Continue to payment'}
               </Button>
+              {hold && !holdActive && (
+                <p className="mt-3 text-sm text-destructive">
+                  Your seat hold expired — click continue to re-hold, or change your seats.
+                </p>
+              )}
+              {holdNote && <p className="mt-3 text-sm text-destructive">{holdNote}</p>}
               {error && (
                 <Alert variant="destructive" className="mt-3 rounded-xl">
                   <AlertDescription>{error}</AlertDescription>

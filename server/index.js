@@ -8,6 +8,8 @@ import { createEntityRouter, HttpError } from './entities.js';
 import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
 import { createAdminRouter } from './admin.js';
+import { createSeatsRouter } from './seats.js';
+import { sweepExpiredHolds } from './booking.js';
 import { sendDepartureReminder } from './notifications.js';
 import { sqlite } from './db.js';
 
@@ -43,6 +45,7 @@ app.use('/api/entities', createEntityRouter());
 app.use('/api/payments', createPaymentsRouter());
 app.use('/api/coupons', createCouponsRouter());
 app.use('/api/admin', createAdminRouter());
+app.use('/api/seats', createSeatsRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {
@@ -98,6 +101,15 @@ function runDepartureReminders() {
 const REMINDER_INTERVAL_MS = 60 * 60 * 1000;
 setInterval(runDepartureReminders, REMINDER_INTERVAL_MS);
 runDepartureReminders();
+
+const HOLD_SWEEP_INTERVAL_MS = 60 * 1000;
+setInterval(() => {
+  try {
+    sweepExpiredHolds();
+  } catch (error) {
+    console.error('[server] Seat hold sweep failed:', error);
+  }
+}, HOLD_SWEEP_INTERVAL_MS);
 
 app.listen(PORT, () => {
   console.log(`[server] API listening on http://localhost:${PORT}`);

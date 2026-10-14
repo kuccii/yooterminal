@@ -37,14 +37,64 @@ function collectSeats(rows) {
   return taken;
 }
 
-export function takenSeatLabels(tripKey, travelDate) {
+export function takenSeatLabels(tripKey, travelDate, now = Date.now()) {
+  sweepExpiredHolds(tripKey, travelDate, now);
   const holds = sqlite
-    .prepare('SELECT seats FROM departure_seat WHERE trip_key = ? AND travel_date = ?')
-    .all(tripKey, travelDate);
+    .prepare(
+      `SELECT seats FROM departure_seat
+        WHERE trip_key = ? AND travel_date = ?
+          AND (expires_at IS NULL OR expires_at > ?)`,
+    )
+    .all(tripKey, travelDate, now);
   const paid = sqlite
     .prepare("SELECT seats FROM booking WHERE trip_key = ? AND travel_date = ? AND status = 'paid'")
     .all(tripKey, travelDate);
   return collectSeats([...holds, ...paid]);
+}
+
+export const HOLD_TTL_MS = 10 * 60 * 1000;
+
+export function sweepExpiredHolds(tripKey = null, travelDate = null, now = Date.now()) {
+  if (tripKey && travelDate) {
+    return sqlite
+      .prepare(
+        'DELETE FROM departure_seat WHERE trip_key = ? AND travel_date = ? AND expires_at IS NOT NULL AND expires_at <= ?',
+      )
+      .run(tripKey, travelDate, now).changes;
+  }
+  return sqlite
+    .prepare('DELETE FROM departure_seat WHERE expires_at IS NOT NULL AND expires_at <= ?')
+    .run(now).changes;
+}
+
+export function findActiveHold(tripKey, travelDate, holderId, now = Date.now()) {
+  return sqlite
+    .prepare(
+      `SELECT * FROM departure_seat
+        WHERE trip_key = ? AND travel_date = ? AND holder_id = ? AND expires_at > ?
+        ORDER BY expires_at DESC`,
+    )
+    .get(tripKey, travelDate, holderId, now) || null;
+}
+
+export function holdCoversSeats(hold, seats) {
+  if (!hold) return false;
+  let held = [];
+  try {
+    held = JSON.parse(hold.seats);
+  } catch {
+    return false;
+  }
+  const heldSet = new Set(sortedSeats(Array.isArray(held) ? held : []));
+  return sortedSeats(seats).every((seat) => heldSet.has(seat));
+}
+
+export function assertOwnActiveHold(tripKey, travelDate, seats, holderId) {
+  const hold = findActiveHold(tripKey, travelDate, holderId);
+  if (!holdCoversSeats(hold, seats)) {
+    throw new HttpError(409, 'Your seat hold has expired — select your seats again to continue.');
+  }
+  return hold;
 }
 
 export function assertSeatsAvailable(tripKey, travelDate, seats) {

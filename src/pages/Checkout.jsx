@@ -126,9 +126,29 @@ export default function Checkout() {
     setCheckingCoupon(false);
   };
 
-  const pay = () => {
+  const pay = async () => {
     setError('');
     setNotice('');
+    setBusy(true);
+    try {
+      const hold = await fetch('/api/seats/hold', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trip_key: draft.trip_key, seats: draft.seats }),
+      });
+      const holdBody = await hold.json().catch(() => ({}));
+      if (!hold.ok) {
+        setError(holdBody.error || 'We could not hold your seats. Please pick your seats again.');
+        setBusy(false);
+        return;
+      }
+    } catch {
+      setError('We could not hold your seats. Please check your connection and try again.');
+      setBusy(false);
+      return;
+    }
+
     const bookingRef = makeBookingRef();
     const started = payWithFlutterwave({
       publicKey: payKey,
@@ -152,10 +172,10 @@ export default function Checkout() {
 
     if (!started) {
       setNotice('We could not open the secure payment window. Please check your connection and try again.');
+      setBusy(false);
       return;
     }
     finished.current = false;
-    setBusy(true);
   };
 
   const labels = buildTrip(

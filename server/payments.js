@@ -5,6 +5,7 @@ import { getCaller } from './auth.js';
 import { HttpError } from './entities.js';
 import {
   assertCouponUsable,
+  assertOwnActiveHold,
   assertSeatsAvailable,
   parseTripKey,
   quoteBooking,
@@ -97,6 +98,8 @@ export function createPaymentsRouter() {
     if (!route_slug || !operator_slug || !departure_time || !travel_date) {
       throw new HttpError(400, 'Invalid trip');
     }
+    const tripKey = String(body.trip_key);
+    assertOwnActiveHold(tripKey, travel_date, seats, caller.id);
 
     const duplicate = sqlite.prepare('SELECT id FROM booking WHERE booking_ref = ?').get(bookingRef);
     if (duplicate) throw new HttpError(409, 'This booking reference was already used');
@@ -150,7 +153,6 @@ export function createPaymentsRouter() {
 
     const now = new Date().toISOString();
     const bookingId = randomUUID();
-    const tripKey = String(body.trip_key);
 
     const insertBooking = sqlite.prepare(
       `INSERT INTO booking (
@@ -173,6 +175,9 @@ export function createPaymentsRouter() {
     const passengersJson = JSON.stringify(passengers);
 
     const booking = sqlite.transaction(() => {
+      sqlite
+        .prepare('DELETE FROM departure_seat WHERE trip_key = ? AND travel_date = ? AND holder_id = ?')
+        .run(tripKey, travel_date, caller.id);
       assertSeatsAvailable(tripKey, travel_date, seats);
       insertBooking.run(
         bookingId,
