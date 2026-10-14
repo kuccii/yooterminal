@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { emailOTP } from 'better-auth/plugins';
 import { sqlite } from './db.js';
+import { sendMailSafe } from './mailer.js';
 
 if (!process.env.BETTER_AUTH_SECRET) {
   console.error(
@@ -32,13 +33,19 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, token }) => {
-      if (!logTokens) {
-        console.warn(`[auth] Password reset requested for ${user.email} — no email provider configured (set AUTH_LOG_TOKENS=1 in dev to print the link).`);
-        return;
-      }
       const link = `${CLIENT_ORIGIN}/reset-password?token=${encodeURIComponent(token)}`;
-      console.log(`[auth] Password reset requested for ${user.email}`);
-      console.log(`[auth]   Open this link: ${link}`);
+      if (logTokens) {
+        console.log(`[auth] Password reset requested for ${user.email}`);
+        console.log(`[auth]   Open this link: ${link}`);
+      }
+      const sent = await sendMailSafe({
+        to: user.email,
+        subject: 'Reset your YooTerminal password',
+        text: `Someone asked to reset the password for your YooTerminal account.\n\nOpen this link within 1 hour to choose a new password:\n${link}\n\nIf you did not request this, you can ignore this email.`,
+      });
+      if (!sent && !logTokens) {
+        console.warn(`[auth] Password reset requested for ${user.email} — email could not be delivered.`);
+      }
     },
   },
   ...(googleEnabled
@@ -59,11 +66,17 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({
       sendVerificationOTP: async ({ email, otp }) => {
-        if (!logTokens) {
-          console.warn(`[auth] OTP requested for ${email} — no email provider configured (set AUTH_LOG_TOKENS=1 in dev to print the code).`);
-          return;
+        if (logTokens) {
+          console.log(`[auth] OTP for ${email}: ${otp}`);
         }
-        console.log(`[auth] OTP for ${email}: ${otp}`);
+        const sent = await sendMailSafe({
+          to: email,
+          subject: 'Your YooTerminal sign-in code',
+          text: `Your YooTerminal one-time code is: ${otp}\n\nIt expires shortly. If you did not try to sign in, ignore this email.`,
+        });
+        if (!sent && !logTokens) {
+          console.warn(`[auth] OTP requested for ${email} — email could not be delivered.`);
+        }
       },
     }),
   ],
