@@ -313,3 +313,6 @@ CREATE INDEX IF NOT EXISTS idx_schedule_lookup ON schedule(route_slug, operator_
 CREATE INDEX IF NOT EXISTS idx_bus_operator ON bus(operator_slug);
 CREATE INDEX IF NOT EXISTS idx_operator_slug ON operator(slug);
 `);
+
+const { runMigrations } = await import('./migrations.js');
+runMigrations(sqlite);
