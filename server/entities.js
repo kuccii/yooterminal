@@ -40,7 +40,7 @@ const ENTITIES = {
       payment_provider: 'text', payment_ref: 'text', payment_tx_id: 'text', paid_at: 'text',
       validated: 'boolean', validated_at: 'text', validated_by: 'text', cancelled_at: 'text',
     },
-    access: { read: 'own', create: 'auth', update: 'creatorOrOwner', delete: 'admin' },
+    access: { read: 'own', create: 'admin', update: 'creatorOrOwner', delete: 'admin' },
   },
   Bus: {
     table: 'bus',
@@ -80,7 +80,7 @@ const ENTITIES = {
       trip_key: 'text', travel_date: 'text', route_slug: 'text', operator_slug: 'text',
       operator_name: 'text', departure_time: 'text', seats: 'json', seat_count: 'number',
     },
-    access: { read: 'public', create: 'auth', update: 'auth', delete: 'auth' },
+    access: { read: 'public', create: 'admin', update: 'admin', delete: 'admin' },
   },
   Operator: {
     table: 'operator',

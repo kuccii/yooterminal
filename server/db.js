@@ -304,3 +304,12 @@ const APP_TABLES = {
 for (const ddl of Object.values(APP_TABLES)) {
   sqlite.exec(ddl);
 }
+
+sqlite.exec(`
+CREATE INDEX IF NOT EXISTS idx_departure_seat_trip ON departure_seat(trip_key, travel_date);
+CREATE INDEX IF NOT EXISTS idx_booking_trip ON booking(trip_key, travel_date, status);
+CREATE INDEX IF NOT EXISTS idx_booking_ref ON booking(booking_ref);
+CREATE INDEX IF NOT EXISTS idx_schedule_lookup ON schedule(route_slug, operator_slug, departure_time);
+CREATE INDEX IF NOT EXISTS idx_bus_operator ON bus(operator_slug);
+CREATE INDEX IF NOT EXISTS idx_operator_slug ON operator(slug);
+`);

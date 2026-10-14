@@ -1,26 +1,21 @@
-// Paste your BusLink Flutterwave public key here (Dashboard → Settings → API keys).
-// The public key is designed to be used in the browser; never put your secret key in this file.
-export const FLUTTERWAVE_PUBLIC_KEY =
-  (import.meta.env && import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY) ||
-  'FLWPUBK-REPLACE-WITH-YOUR-PUBLIC-KEY';
-
-export function isPaymentConfigured() {
-  return /^FLWPUBK(-TEST)?-/i.test(FLUTTERWAVE_PUBLIC_KEY) && !/REPLACE/i.test(FLUTTERWAVE_PUBLIC_KEY);
+export function looksConfigured(publicKey) {
+  const key = String(publicKey || '');
+  return /^FLWPUBK(-TEST)?-/i.test(key) && !/REPLACE/i.test(key);
 }
 
-export function payWithFlutterwave({ txRef, amount, currency, customer, description, onSuccess, onClose }) {
-  if (!isPaymentConfigured() || typeof window === 'undefined' || typeof window.FlutterwaveCheckout !== 'function') {
+export function payWithFlutterwave({ publicKey, txRef, amount, currency, customer, description, onSuccess, onClose }) {
+  if (!looksConfigured(publicKey) || typeof window === 'undefined' || typeof window.FlutterwaveCheckout !== 'function') {
     return false;
   }
   window.FlutterwaveCheckout({
-    public_key: FLUTTERWAVE_PUBLIC_KEY,
+    public_key: publicKey,
     tx_ref: txRef,
     amount: Number(amount),
     currency,
     payment_options: 'card,mobilemoneyuganda,mobilemoneyrwanda',
     customer,
     customizations: {
-      title: 'BusLink',
+      title: 'YooTerminal',
       description,
     },
     callback: onSuccess,

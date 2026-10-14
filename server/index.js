@@ -5,6 +5,7 @@ import express from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { auth, googleEnabled } from './auth.js';
 import { createEntityRouter, HttpError } from './entities.js';
+import { createPaymentsRouter } from './payments.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3001;
@@ -19,10 +20,14 @@ app.all('/api/auth/*splat', toNodeHandler(auth));
 app.use(express.json());
 
 app.get('/api/config', (req, res) => {
-  res.json({ google: googleEnabled });
+  res.json({
+    google: googleEnabled,
+    flutterwavePublicKey: process.env.FLW_PUBLIC_KEY || '',
+  });
 });
 
 app.use('/api/entities', createEntityRouter());
+app.use('/api/payments', createPaymentsRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {
@@ -53,12 +58,11 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-   
   console.log(`[server] API listening on http://localhost:${PORT}`);
-  if (!process.env.BETTER_AUTH_SECRET) {
-    console.log('[server] Using the default auth secret — set BETTER_AUTH_SECRET in .env for anything beyond local dev.');
-  }
   if (!googleEnabled) {
     console.log('[server] Google sign-in disabled (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET to enable).');
+  }
+  if (!process.env.FLW_SECRET_KEY || !process.env.FLW_PUBLIC_KEY) {
+    console.log('[server] Flutterwave keys not set — online payments disabled (FLW_PUBLIC_KEY / FLW_SECRET_KEY).');
   }
 });

@@ -1,6 +1,6 @@
 import db from '@/api/client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CreditCard, Loader2, Lock, Smartphone } from 'lucide-react';
 
@@ -9,10 +9,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { makeBookingRef, makeTxRef, saveTicket } from '@/lib/bookingRef';
+import { makeBookingRef, saveTicket } from '@/lib/bookingRef';
 import { Input } from '@/components/ui/input';
-import { commissionPercentFor, commissionSplit, discountFor } from '@/lib/commission';
-import { isPaymentConfigured, payWithFlutterwave } from '@/lib/flutterwave';
+import { discountFor } from '@/lib/commission';
+import { looksConfigured, payWithFlutterwave } from '@/lib/flutterwave';
 import { formatMoney, todayISO } from '@/lib/format';
 import { buildTrip } from '@/lib/trips';
 
@@ -28,6 +28,22 @@ export default function Checkout() {
   const [coupon, setCoupon] = useState(null);
   const [couponNote, setCouponNote] = useState('');
   const [checkingCoupon, setCheckingCoupon] = useState(false);
+  const [payKey, setPayKey] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/config', { credentials: 'include' })
+      .then((response) => response.json())
+      .then((config) => {
+        if (active) setPayKey(config.flutterwavePublicKey || '');
+      })
+      .catch(() => {
+        if (active) setPayKey('');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (!draft) {
     return (
@@ -43,63 +59,37 @@ export default function Checkout() {
     );
   }
 
-  const payConfigured = isPaymentConfigured();
+  const payConfigured = looksConfigured(payKey);
   const discount = coupon ? discountFor(coupon, draft.amount) : 0;
   const paid = Math.max(draft.amount - discount, 0);
 
-  const handleSuccess = async (bookingRef, txRef, response) => {
+  const handleSuccess = async (bookingRef, response) => {
     finished.current = true;
     try {
-      const [operatorPage, settingPage] = await Promise.all([
-        db.entities.Operator.filter({ slug: draft.operator_slug }, { limit: 1 }),
-        db.entities.PlatformSetting.list({ limit: 1 }),
-      ]);
-      const operator = operatorPage.items?.[0] || null;
-      const percent = commissionPercentFor(operator, settingPage.items?.[0] || null, draft.crossing_border);
-      const split = commissionSplit(paid, percent);
-
-      const booking = await db.entities.Booking.create({
-        booking_ref: bookingRef,
-        status: 'paid',
-        trip_key: draft.trip_key,
-        route_slug: draft.route_slug,
-        travel_date: draft.travel_date,
-        origin_city: draft.origin_city,
-        destination_city: draft.destination_city,
-        operator_name: draft.operator_name,
-        operator_slug: draft.operator_slug,
-        departure_time: draft.departure_time,
-        duration_minutes: draft.duration_minutes,
-        bus_class: draft.bus_class,
-        seats: draft.seats,
-        passengers: draft.passengers,
-        passenger_count: draft.passenger_count,
-        contact_name: draft.contact_name,
-        contact_email: draft.contact_email,
-        contact_phone: draft.contact_phone,
-        amount: paid,
-        currency: draft.currency,
-        payment_provider: 'flutterwave',
-        payment_ref: txRef,
-        payment_tx_id: response?.transaction_id ? String(response.transaction_id) : '',
-        coupon_code: coupon?.code || '',
-        discount_amount: discount,
-        commission_percent: percent,
-        platform_fee: split.fee,
-        operator_net: split.net,
-        operator_owner_email: operator?.owner_email || '',
-        paid_at: new Date().toISOString(),
-      });
-
-      await db.entities.DepartureSeat.create({
-        trip_key: draft.trip_key,
-        travel_date: draft.travel_date,
-        route_slug: draft.route_slug,
-        operator_slug: draft.operator_slug,
-        operator_name: draft.operator_name,
-        departure_time: draft.departure_time,
-        seats: draft.seats,
-        seat_count: draft.seats.length,
+      const booking = await fetch('/api/payments/confirm', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booking_ref: bookingRef,
+          transaction_id: response?.transaction_id ? String(response.transaction_id) : '',
+          trip_key: draft.trip_key,
+          seats: draft.seats,
+          passengers: draft.passengers,
+          passenger_count: draft.passenger_count,
+          contact_name: draft.contact_name,
+          contact_email: draft.contact_email,
+          contact_phone: draft.contact_phone,
+          coupon_code: coupon?.code || '',
+        }),
+      }).then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const error = new Error(body.error || 'We could not confirm your payment.');
+          error.status = res.status;
+          throw error;
+        }
+        return body;
       });
 
       saveTicket(booking);
@@ -107,7 +97,7 @@ export default function Checkout() {
     } catch (caught) {
       setBusy(false);
       setError(
-        `Your payment went through but we could not issue the ticket automatically. Quote reference ${bookingRef} to our support team and we will send it right away.`
+        `${caught?.message || 'We could not confirm your payment.'} Your payment provider has the transaction — quote reference ${bookingRef} to our support team if you were charged.`,
       );
     }
   };
@@ -139,9 +129,9 @@ export default function Checkout() {
     setError('');
     setNotice('');
     const bookingRef = makeBookingRef();
-    const txRef = makeTxRef();
     const started = payWithFlutterwave({
-      txRef,
+      publicKey: payKey,
+      txRef: bookingRef,
       amount: paid,
       currency: draft.currency,
       customer: {
@@ -150,7 +140,7 @@ export default function Checkout() {
         name: draft.contact_name,
       },
       description: `${draft.origin_city} to ${draft.destination_city} · ${draft.travel_date} · ${draft.seats.join(', ')}`,
-      onSuccess: (response) => handleSuccess(bookingRef, txRef, response),
+      onSuccess: (response) => handleSuccess(bookingRef, response),
       onClose: () => {
         if (!finished.current) {
           setBusy(false);
@@ -284,8 +274,8 @@ export default function Checkout() {
               {!payConfigured && (
                 <Alert className="mt-4 rounded-xl">
                   <AlertDescription>
-                    Online payment is not switched on yet. Add your Flutterwave public key to start accepting card and
-                    mobile money payments.
+                    Online payment is not switched on yet. The Flutterwave keys need to be set on the server to
+                    accept card and mobile money payments.
                   </AlertDescription>
                 </Alert>
               )}
