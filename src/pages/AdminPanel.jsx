@@ -1,19 +1,30 @@
 import db from '@/api/client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { BarChart3, BusFront, Image as ImageIcon, Map, ShieldCheck, Users } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
+import DashboardLayout from '@/components/DashboardLayout';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AdminContentTab from '@/components/admin/AdminContentTab';
 import AdminOperatorsTab from '@/components/admin/AdminOperatorsTab';
 import AdminOperationsTab from '@/components/admin/AdminOperationsTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminRoutesTab from '@/components/admin/AdminRoutesTab';
 
+const NAV_ITEMS = [
+  { id: 'operators', label: 'Operators', icon: Users },
+  { id: 'routes', label: 'Routes & stops', icon: Map },
+  { id: 'operations', label: 'Fleet & departures', icon: BusFront },
+  { id: 'content', label: 'Content', icon: ImageIcon },
+  { id: 'reports', label: 'Reports', icon: BarChart3 },
+];
+
+const SUBTITLE = 'Run the network: approve operators, set commission, curate the route catalogue and watch the numbers.';
+
 export default function AdminPanel() {
   const { user, isLoadingAuth } = useAuth();
+  const [active, setActive] = useState('operators');
   const [state, setState] = useState({
     loading: true,
     operators: [],
@@ -39,6 +50,7 @@ export default function AdminPanel() {
   }, []);
 
   const isAdmin = user?.role === 'admin';
+  const sectionTitle = NAV_ITEMS.find((item) => item.id === active)?.label || 'Admin panel';
 
   useEffect(() => {
     if (!isLoadingAuth && isAdmin) load();
@@ -46,56 +58,59 @@ export default function AdminPanel() {
 
   if (isLoadingAuth || (isAdmin && state.loading)) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-10">
+      <DashboardLayout
+        items={NAV_ITEMS}
+        active={active}
+        onNavigate={setActive}
+        title={sectionTitle}
+        subtitle={SUBTITLE}
+        user={user}
+      >
         <Skeleton className="h-40 w-full rounded-3xl" />
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <ShieldCheck className="mx-auto h-8 w-8 text-muted-foreground" />
-        <h1 className="mt-4 font-display text-2xl font-extrabold">This area is for the platform team</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Ask the app owner to give your account the admin role if you need to manage operators, fares or content.
-        </p>
-      </div>
+      <DashboardLayout items={[]} active={active} onNavigate={setActive} title="Admin panel" user={user}>
+        <div className="mx-auto max-w-lg px-4 py-16 text-center">
+          <ShieldCheck className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h2 className="mt-4 font-display text-2xl font-extrabold">This area is for the platform team</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Ask the app owner to give your account the admin role if you need to manage operators, fares or content.
+          </p>
+        </div>
+      </DashboardLayout>
     );
   }
 
+  const renderSection = () => {
+    switch (active) {
+      case 'routes':
+        return <AdminRoutesTab routes={state.routes} cities={state.cities} onChanged={load} />;
+      case 'operations':
+        return <AdminOperationsTab operators={state.operators} routes={state.routes} />;
+      case 'content':
+        return <AdminContentTab />;
+      case 'reports':
+        return <AdminReportsTab operators={state.operators} routes={state.routes} />;
+      case 'operators':
+      default:
+        return <AdminOperatorsTab operators={state.operators} setting={state.setting} onChanged={load} />;
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="font-display text-3xl font-extrabold tracking-tight">Admin panel</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Run the network: approve operators, set commission, curate the route catalogue and watch the numbers.
-      </p>
-
-      <Tabs defaultValue="operators" className="mt-8">
-        <TabsList className="flex h-auto flex-wrap justify-start gap-1">
-          <TabsTrigger value="operators">Operators</TabsTrigger>
-          <TabsTrigger value="routes">Routes &amp; stops</TabsTrigger>
-          <TabsTrigger value="operations">Fleet &amp; departures</TabsTrigger>
-          <TabsTrigger value="content">Banners, coupons &amp; reviews</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="operators" className="mt-6">
-          <AdminOperatorsTab operators={state.operators} setting={state.setting} onChanged={load} />
-        </TabsContent>
-        <TabsContent value="routes" className="mt-6">
-          <AdminRoutesTab routes={state.routes} cities={state.cities} onChanged={load} />
-        </TabsContent>
-        <TabsContent value="operations" className="mt-6">
-          <AdminOperationsTab operators={state.operators} routes={state.routes} />
-        </TabsContent>
-        <TabsContent value="content" className="mt-6">
-          <AdminContentTab />
-        </TabsContent>
-        <TabsContent value="reports" className="mt-6">
-          <AdminReportsTab operators={state.operators} routes={state.routes} />
-        </TabsContent>
-      </Tabs>
-    </div>
+    <DashboardLayout
+      items={NAV_ITEMS}
+      active={active}
+      onNavigate={setActive}
+      title={sectionTitle}
+      subtitle={SUBTITLE}
+      user={user}
+    >
+      {renderSection()}
+    </DashboardLayout>
   );
 }

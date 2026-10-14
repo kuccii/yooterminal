@@ -70,9 +70,12 @@ const AuthenticatedApp = () => {
         <Route path="/help" element={<Help />} />
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route path="/trips" element={<MyTrips />} />
-          <Route path="/operator" element={<OperatorDashboard />} />
-          <Route path="/admin" element={<AdminPanel />} />
         </Route>
+      </Route>
+
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        <Route path="/operator" element={<OperatorDashboard />} />
+        <Route path="/admin" element={<AdminPanel />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />

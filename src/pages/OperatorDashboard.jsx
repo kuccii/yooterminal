@@ -1,9 +1,10 @@
 import db from '@/api/client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BusFront, LayoutDashboard } from 'lucide-react';
+import { BusFront, CalendarClock, LayoutDashboard, ScanLine, Ticket, Wallet } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
+import DashboardLayout from '@/components/DashboardLayout';
 import OperatorAvatar from '@/components/OperatorAvatar';
 import OperatorBookingsTab from '@/components/operator/OperatorBookingsTab';
 import OperatorEarningsTab from '@/components/operator/OperatorEarningsTab';
@@ -13,7 +14,6 @@ import OperatorValidationTab from '@/components/operator/OperatorValidationTab';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const STATUS_STYLES = {
   approved: 'bg-[hsl(var(--trust))] text-white',
@@ -21,8 +21,17 @@ const STATUS_STYLES = {
   suspended: 'bg-destructive text-destructive-foreground',
 };
 
+const NAV_ITEMS = [
+  { id: 'timetable', label: 'Timetable & fares', icon: CalendarClock },
+  { id: 'fleet', label: 'Fleet', icon: BusFront },
+  { id: 'bookings', label: 'Booked tickets', icon: Ticket },
+  { id: 'validation', label: 'Ticket validation', icon: ScanLine },
+  { id: 'earnings', label: 'Earnings', icon: Wallet },
+];
+
 export default function OperatorDashboard() {
   const { user, isLoadingAuth } = useAuth();
+  const [active, setActive] = useState('timetable');
   const [state, setState] = useState({ loading: true, operators: [], routes: [], setting: null, picked: '' });
 
   const load = useCallback(async () => {
@@ -54,10 +63,12 @@ export default function OperatorDashboard() {
 
   if (isLoadingAuth || state.loading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <Skeleton className="h-24 w-full rounded-3xl" />
-        <Skeleton className="mt-6 h-64 w-full rounded-3xl" />
-      </div>
+      <DashboardLayout items={NAV_ITEMS} active={active} onNavigate={setActive} user={user}>
+        <div className="space-y-6">
+          <Skeleton className="h-24 w-full rounded-3xl" />
+          <Skeleton className="h-64 w-full rounded-3xl" />
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -65,25 +76,49 @@ export default function OperatorDashboard() {
 
   if (!operator) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <LayoutDashboard className="mx-auto h-8 w-8 text-muted-foreground" />
-        <h1 className="mt-4 font-display text-2xl font-extrabold">No operator dashboard yet</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Your email is not linked to a bus company on the network. Ask the platform team to add you as the dashboard
-          owner of your company, then sign in again.
-        </p>
-      </div>
+      <DashboardLayout
+        items={[]}
+        active={active}
+        onNavigate={setActive}
+        title="Operator dashboard"
+        user={user}
+      >
+        <div className="mx-auto max-w-lg px-4 py-16 text-center">
+          <LayoutDashboard className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h2 className="mt-4 font-display text-2xl font-extrabold">No operator dashboard yet</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your email is not linked to a bus company on the network. Ask the platform team to add you as the dashboard
+            owner of your company, then sign in again.
+          </p>
+        </div>
+      </DashboardLayout>
     );
   }
 
+  const renderSection = () => {
+    switch (active) {
+      case 'fleet':
+        return <OperatorFleetTab operator={operator} />;
+      case 'bookings':
+        return <OperatorBookingsTab operator={operator} />;
+      case 'validation':
+        return <OperatorValidationTab operator={operator} user={user} />;
+      case 'earnings':
+        return <OperatorEarningsTab operator={operator} setting={state.setting} />;
+      case 'timetable':
+      default:
+        return <OperatorTimetableTab operator={operator} routes={state.routes} />;
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
+    <DashboardLayout items={NAV_ITEMS} active={active} onNavigate={setActive} user={user}>
       <Card className="rounded-3xl border-border p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
             <OperatorAvatar name={operator.name} color={operator.brand_color} size="lg" />
             <div className="min-w-0">
-              <h1 className="font-display text-2xl font-extrabold tracking-tight">{operator.name}</h1>
+              <h2 className="font-display text-2xl font-extrabold tracking-tight">{operator.name}</h2>
               <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                 <span
                   className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
@@ -121,31 +156,7 @@ export default function OperatorDashboard() {
         )}
       </Card>
 
-      <Tabs defaultValue="timetable" className="mt-8">
-        <TabsList className="flex h-auto flex-wrap justify-start gap-1">
-          <TabsTrigger value="timetable">Timetable &amp; fares</TabsTrigger>
-          <TabsTrigger value="fleet">Fleet</TabsTrigger>
-          <TabsTrigger value="bookings">Booked tickets</TabsTrigger>
-          <TabsTrigger value="validation">Ticket validation</TabsTrigger>
-          <TabsTrigger value="earnings">Earnings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="timetable" className="mt-6">
-          <OperatorTimetableTab operator={operator} routes={state.routes} />
-        </TabsContent>
-        <TabsContent value="fleet" className="mt-6">
-          <OperatorFleetTab operator={operator} />
-        </TabsContent>
-        <TabsContent value="bookings" className="mt-6">
-          <OperatorBookingsTab operator={operator} />
-        </TabsContent>
-        <TabsContent value="validation" className="mt-6">
-          <OperatorValidationTab operator={operator} user={user} />
-        </TabsContent>
-        <TabsContent value="earnings" className="mt-6">
-          <OperatorEarningsTab operator={operator} setting={state.setting} />
-        </TabsContent>
-      </Tabs>
-    </div>
+      <div className="mt-6">{renderSection()}</div>
+    </DashboardLayout>
   );
 }
