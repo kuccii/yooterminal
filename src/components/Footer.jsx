@@ -58,7 +58,7 @@ export default function Footer() {
           <Column title="Buses in Rwanda" links={RW_CITIES} />
         </div>
         <div className="mt-10 flex flex-col gap-2 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} BusLink. Bus travel made easy.</p>
+          <p>© {new Date().getFullYear()} YooTerminal. Bus travel made easy.</p>
           <p className="flex gap-4">
             <Link to="/help" className="transition hover:text-primary">
               Help
