@@ -231,7 +231,7 @@ export default function TripDetail() {
         setHoldBusy(false);
       }
     }
-    const draft = {
+    const legDraft = {
       trip_key: trip.key,
       route_slug: data.schedule.route_slug,
       travel_date: parsed.travel_date,
@@ -256,7 +256,38 @@ export default function TripDetail() {
       contact_phone: contact.phone.trim(),
       amount: Number(trip.price) * selected.length,
     };
-    navigate('/checkout', { state: { draft } });
+    if (params.get('returning') === '1') {
+      let outbound = null;
+      try {
+        outbound = JSON.parse(sessionStorage.getItem('yoo_return_draft') || 'null');
+      } catch {
+        outbound = null;
+      }
+      if (!outbound?.trip_key) {
+        setError('Your outbound selection is missing — pick the outbound trip first, then the return.');
+        return;
+      }
+      sessionStorage.removeItem('yoo_return_draft');
+      navigate('/checkout', {
+        state: { draft: { legs: [outbound, legDraft], group_ref: crypto.randomUUID() } },
+      });
+      return;
+    }
+    const returnDate = params.get('return_date');
+    if (returnDate) {
+      sessionStorage.setItem('yoo_return_draft', JSON.stringify(legDraft));
+      const returnParams = new URLSearchParams({
+        from: data.route?.destination_slug || legDraft.route_slug.split('-').slice(0, -1).join('-'),
+        to: data.route?.origin_slug || '',
+        date: returnDate,
+        passengers: String(wanted),
+        return_date: returnDate,
+        returning: '1',
+      });
+      navigate(`/search?${returnParams.toString()}`);
+      return;
+    }
+    navigate('/checkout', { state: { draft: legDraft } });
   };
 
   if (data.loading) {

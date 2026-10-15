@@ -1,7 +1,7 @@
 import db from '@/api/client';
 
-import React, { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal } from 'lucide-react';
 
 import SearchForm from '@/components/SearchForm';
@@ -11,21 +11,25 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { buildTrips, heldSeatsByTrip, seatsLeft, SORT_OPTIONS, TIME_WINDOWS } from '@/lib/trips';
-import { formatDateFull, todayISO } from '@/lib/format';
+import { buildTrip, buildTrips, heldSeatsByTrip, seatsLeft, SORT_OPTIONS, TIME_WINDOWS } from '@/lib/trips';
+import { formatDateFull, formatDateShort, formatMoney, shiftDays, todayISO } from '@/lib/format';
 
 const EMPTY_FILTERS = { windows: [], operators: [], classes: [], maxPrice: null };
 
 export default function SearchResults() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const fromSlug = params.get('from') || '';
   const toSlug = params.get('to') || '';
   const travelDate = params.get('date') || todayISO();
   const passengers = Number(params.get('passengers') || 1);
+  const returnDate = params.get('return_date') || '';
+  const returning = params.get('returning') === '1';
   const routeSlug = fromSlug && toSlug ? `${fromSlug}-${toSlug}` : '';
 
   const [route, setRoute] = useState(null);
   const [facets, setFacets] = useState({ operators: [], classes: [], price: null });
+  const [timetable, setTimetable] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [sort, setSort] = useState('cheapest');
   const [trips, setTrips] = useState([]);
@@ -33,6 +37,8 @@ export default function SearchResults() {
   const [operatorMap, setOperatorMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
+  const [returnData, setReturnData] = useState(null);
+  const [returnDraft, setReturnDraft] = useState(null);
 
   useEffect(() => {
     setFilters(EMPTY_FILTERS);
@@ -70,6 +76,7 @@ export default function SearchResults() {
 
       const timetable = timetablePage.items || [];
       const prices = timetable.map((item) => Number(item.price)).filter((value) => !Number.isNaN(value));
+      setTimetable(timetable);
       setFacets({
         operators: [...new Set(timetable.map((item) => item.operator_name))].sort(),
         classes: [...new Set(timetable.map((item) => item.bus_class))].sort(),
@@ -133,6 +140,93 @@ export default function SearchResults() {
   const clearFilters = () => setFilters(EMPTY_FILTERS);
   const currency = trips[0]?.schedule.currency || facets.price?.currency || 'UGX';
 
+  useEffect(() => {
+    if (!returning) {
+      setReturnDraft(null);
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem('yoo_return_draft');
+      setReturnDraft(raw ? JSON.parse(raw) : null);
+    } catch {
+      setReturnDraft(null);
+    }
+  }, [returning]);
+
+  useEffect(() => {
+    if (!routeSlug || !returnDate || returning) {
+      setReturnData(null);
+      return undefined;
+    }
+    let active = true;
+    const reverseSlug = `${toSlug}-${fromSlug}`;
+    setReturnData(null);
+
+    (async () => {
+      const reverseRoutePage = await db.entities.Route.filter({ slug: reverseSlug }, { limit: 1 });
+      const reverseRoute = reverseRoutePage.items?.[0] || null;
+      if (!active) return;
+      if (!reverseRoute) {
+        setReturnData({ route: null, trips: [], held: {}, operators: [] });
+        return;
+      }
+
+      const schedulePage = await db.entities.Schedule.filter(
+        { route_slug: reverseSlug, active: true, operator_status: 'approved' },
+        { limit: 100 }
+      );
+      const list = buildTrips(schedulePage.items || [], returnDate).sort((a, b) => a.price - b.price);
+      const keys = list.map((trip) => trip.key);
+      const slugs = [...new Set(list.map((trip) => trip.schedule.operator_slug))];
+
+      const [heldPage, operatorPage] = await Promise.all([
+        keys.length
+          ? db.entities.DepartureSeat.filter({ trip_key: { $in: keys } }, { limit: 500, fields: ['trip_key', 'seats'] })
+          : Promise.resolve({ items: [] }),
+        slugs.length
+          ? db.entities.Operator.filter({ slug: { $in: slugs } }, { limit: 50 })
+          : Promise.resolve({ items: [] }),
+      ]);
+      if (!active) return;
+
+      setOperatorMap((previous) => ({
+        ...previous,
+        ...Object.fromEntries((operatorPage.items || []).map((item) => [item.slug, item])),
+      }));
+      setReturnData({
+        route: reverseRoute,
+        trips: list,
+        held: heldSeatsByTrip(heldPage.items || []),
+      });
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [routeSlug, returnDate, returning, fromSlug, toSlug]);
+
+  const dateOptions = useMemo(() => {
+    if (!timetable.length || returning) return [];
+    const options = [];
+    for (let offset = -1; offset <= 5; offset += 1) {
+      const day = shiftDays(travelDate, offset);
+      if (day < todayISO()) continue;
+      let cheapest = null;
+      for (const schedule of timetable) {
+        const price = buildTrip(schedule, day).price;
+        if (cheapest === null || price < cheapest) cheapest = price;
+      }
+      options.push({ date: day, price: cheapest });
+    }
+    return options;
+  }, [timetable, travelDate, returning]);
+
+  const pickDate = (day) => {
+    const next = new URLSearchParams(params.toString());
+    next.set('date', day);
+    navigate(`/search?${next.toString()}`);
+  };
+
   return (
     <>
       <div className="border-b border-border bg-secondary/50 py-6">
@@ -153,10 +247,64 @@ export default function SearchResults() {
               {passengers > 1 && ` · ${passengers} passengers`}
             </p>
           </div>
+          {dateOptions.length > 0 && (
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+              {dateOptions.map((option) => (
+                <button
+                  key={option.date}
+                  type="button"
+                  onClick={() => pickDate(option.date)}
+                  className={`shrink-0 rounded-xl border px-3 py-1.5 text-left text-xs transition ${
+                    option.date === travelDate
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary hover:text-primary'
+                  }`}
+                >
+                  <p className="font-semibold">
+                    {option.date === travelDate ? 'Selected' : formatDateShort(option.date)}
+                  </p>
+                  <p>{option.price !== null ? `from ${formatMoney(option.price, currency)}` : '—'}</p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-8">
+        {returning && (
+          <div className="mb-6 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+            {returnDraft ? (
+              <>
+                <p className="text-sm font-semibold">
+                  Outbound held: {returnDraft.origin_city} → {returnDraft.destination_city} ·{' '}
+                  {formatDateFull(returnDraft.travel_date)} · seats {returnDraft.seats.join(', ')}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Choose your return trip below — both legs are paid together.{' '}
+                  <Link
+                    to={`/trip/${encodeURIComponent(returnDraft.trip_key)}?passengers=${passengers}${
+                      returnDate ? `&return_date=${returnDate}` : ''
+                    }`}
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    Change outbound
+                  </Link>
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold">Pick your outbound trip first.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <Link to="/" className="font-semibold text-primary hover:underline">
+                    Start a new search
+                  </Link>{' '}
+                  to choose the trip going out, then come back here for the return.
+                </p>
+              </>
+            )}
+          </div>
+        )}
         <div className="grid gap-6 md:grid-cols-[280px_1fr]">
           <aside className="hidden md:block">
             <div className="sticky top-24">
@@ -261,6 +409,59 @@ export default function SearchResults() {
                   />
                 ))}
             </div>
+
+            {!loading && returnDate && !returning && route && (
+              <div className="mt-12">
+                <div className="mb-5 border-t border-border pt-6">
+                  <h2 className="font-display text-xl font-extrabold tracking-tight">
+                    Return ·{' '}
+                    {returnData?.route
+                      ? `${returnData.route.origin_city} → ${returnData.route.destination_city}`
+                      : `${route.destination_city} → ${route.origin_city}`}{' '}
+                    on {formatDateFull(returnDate)}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Pick your way back — outbound and return are booked and paid together.
+                  </p>
+                </div>
+
+                {returnData === null && (
+                  <div className="space-y-4">
+                    {[1, 2].map((item) => (
+                      <Skeleton key={item} className="h-28 w-full rounded-2xl" />
+                    ))}
+                  </div>
+                )}
+
+                {returnData && !returnData.route && (
+                  <EmptyPanel
+                    title="No return route available"
+                    body="We don't run buses on the return leg of this route yet. You can still book the outbound trip on its own."
+                  />
+                )}
+
+                {returnData?.route && !returnData.trips.length && (
+                  <EmptyPanel
+                    title="No return departures on this date"
+                    body="Try another return date using the search form above."
+                  />
+                )}
+
+                {returnData?.route && returnData.trips.length > 0 && (
+                  <div className="space-y-4">
+                    {returnData.trips.map((trip) => (
+                      <TripCard
+                        key={trip.key}
+                        trip={trip}
+                        passengers={passengers}
+                        operator={operatorMap[trip.schedule.operator_slug]}
+                        seatsAvailable={seatsLeft(trip, returnData.held)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
       </div>

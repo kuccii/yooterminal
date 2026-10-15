@@ -6,9 +6,9 @@ import CityPicker from '@/components/CityPicker';
 import DateField from '@/components/DateField';
 import PassengerField from '@/components/PassengerField';
 import { useCities } from '@/hooks/useCities';
-import { todayISO } from '@/lib/format';
+import { shiftDays, todayISO } from '@/lib/format';
 
-export default function SearchForm({ initialFrom, initialTo, initialDate, initialPassengers, className, onSearch }) {
+export default function SearchForm({ initialFrom, initialTo, initialDate, initialPassengers, initialReturnDate, className, onSearch }) {
   const cities = useCities();
   const navigate = useNavigate();
   const [from, setFrom] = useState(null);
@@ -16,6 +16,8 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
   const [resolved, setResolved] = useState(false);
   const [date, setDate] = useState(initialDate || todayISO());
   const [passengers, setPassengers] = useState(initialPassengers || 1);
+  const [tripType, setTripType] = useState(initialReturnDate ? 'return' : 'oneway');
+  const [returnDate, setReturnDate] = useState(initialReturnDate || shiftDays(initialDate || todayISO(), 7));
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -24,6 +26,10 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
     setTo(cities.find((city) => city.slug === initialTo) || null);
     setResolved(true);
   }, [cities, resolved, initialFrom, initialTo]);
+
+  useEffect(() => {
+    if (returnDate < date) setReturnDate(date);
+  }, [date, returnDate]);
 
   const swap = () => {
     setFrom(to);
@@ -40,6 +46,10 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
       setError('Your departure and arrival cities must be different.');
       return;
     }
+    if (tripType === 'return' && returnDate < date) {
+      setError('Your return date cannot be before your outbound date.');
+      return;
+    }
     setError('');
     const params = new URLSearchParams({
       from: from.slug,
@@ -47,6 +57,7 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
       date,
       passengers: String(passengers),
     });
+    if (tripType === 'return') params.set('return_date', returnDate);
     if (onSearch) {
       onSearch(params);
     } else {
@@ -76,6 +87,31 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
           <Search className="mr-1.5 h-4 w-4" />
           Search
         </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 px-2 pb-2 pt-1">
+        <div className="flex rounded-full border border-border p-0.5">
+          {[
+            ['oneway', 'One-way'],
+            ['return', 'Return'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTripType(id)}
+              className={`rounded-full px-3.5 py-1 text-sm font-semibold transition ${
+                tripType === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {tripType === 'return' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Coming back</span>
+            <DateField value={returnDate} onChange={setReturnDate} />
+          </div>
+        )}
       </div>
       {error && <p className="px-3 pb-2 pt-1 text-sm font-medium text-destructive">{error}</p>}
     </form>

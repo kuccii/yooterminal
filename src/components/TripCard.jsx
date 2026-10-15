@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,11 @@ import { formatDuration, formatMoney } from '@/lib/format';
 
 export default function TripCard({ trip, operator, seatsAvailable, passengers = 1 }) {
   const schedule = trip.schedule;
+  const [params] = useSearchParams();
+  const detailParams = new URLSearchParams({ passengers: String(passengers) });
+  const returnDate = params.get('return_date');
+  if (returnDate) detailParams.set('return_date', returnDate);
+  if (params.get('returning') === '1') detailParams.set('returning', '1');
 
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -45,7 +50,7 @@ export default function TripCard({ trip, operator, seatsAvailable, passengers = 
         </div>
 
         <Button asChild className="rounded-xl">
-          <Link to={`/trip/${encodeURIComponent(trip.key)}?passengers=${passengers}`}>Select seats</Link>
+          <Link to={`/trip/${encodeURIComponent(trip.key)}?${detailParams.toString()}`}>Select seats</Link>
         </Button>
       </div>
 

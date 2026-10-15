@@ -7,6 +7,8 @@ import {
   assertCouponUsable,
   assertOwnActiveHold,
   assertSeatsAvailable,
+  commissionSplit,
+  discountFor,
   parseTripKey,
   quoteBooking,
   sortedSeats,
@@ -149,6 +151,68 @@ function normalizePassengers(passengers, seats) {
   });
 }
 
+function normalizeLeg(raw) {
+  const tripKey = String(raw?.trip_key || '');
+  const seats = sortedSeats(raw?.seats);
+  if (!seats.length || seats.length > 10) throw new HttpError(400, 'Invalid seat selection');
+  const { route_slug, operator_slug, departure_time, travel_date } = parseTripKey(tripKey);
+  if (!route_slug || !operator_slug || !departure_time || !travel_date) throw new HttpError(400, 'Invalid trip');
+  const passengers = normalizePassengers(raw?.passengers, seats);
+  if (Number(raw?.passenger_count) !== seats.length) {
+    throw new HttpError(400, 'Passenger count does not match the seats');
+  }
+  return { tripKey, route_slug, operator_slug, departure_time, travel_date, seats, passengers };
+}
+
+function nextBookingRef() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (;;) {
+    let ref = 'BL';
+    for (let index = 0; index < 8; index += 1) {
+      ref += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    const clash = sqlite.prepare('SELECT id FROM booking WHERE booking_ref = ?').get(ref);
+    if (!clash) return ref;
+  }
+}
+
+function serializeBooking(booking) {
+  return {
+    id: booking.id,
+    booking_ref: booking.booking_ref,
+    status: booking.status,
+    trip_key: booking.trip_key,
+    route_slug: booking.route_slug,
+    travel_date: booking.travel_date,
+    origin_city: booking.origin_city,
+    destination_city: booking.destination_city,
+    operator_name: booking.operator_name,
+    operator_slug: booking.operator_slug,
+    departure_time: booking.departure_time,
+    duration_minutes: booking.duration_minutes === null ? null : Number(booking.duration_minutes),
+    bus_class: booking.bus_class,
+    seats: JSON.parse(booking.seats),
+    passengers: JSON.parse(booking.passengers),
+    passenger_count: Number(booking.passenger_count),
+    contact_name: booking.contact_name,
+    contact_email: booking.contact_email,
+    contact_phone: booking.contact_phone,
+    amount: Number(booking.amount),
+    currency: booking.currency,
+    coupon_code: booking.coupon_code,
+    discount_amount: Number(booking.discount_amount),
+    commission_percent: Number(booking.commission_percent),
+    platform_fee: Number(booking.platform_fee),
+    operator_net: Number(booking.operator_net),
+    payment_provider: booking.payment_provider,
+    payment_ref: booking.payment_ref,
+    payment_tx_id: booking.payment_tx_id,
+    paid_at: booking.paid_at,
+    created_date: booking.created_date,
+    group_ref: booking.group_ref || null,
+  };
+}
+
 export function createPaymentsRouter() {
   const router = express.Router();
 
@@ -162,40 +226,28 @@ export function createPaymentsRouter() {
     const body = req.body || {};
     const bookingRef = String(body.booking_ref || '').trim();
     const transactionId = String(body.transaction_id || '').trim();
-    const seats = sortedSeats(body.seats);
     if (!/^BL[A-Z0-9]{4,12}$/.test(bookingRef)) throw new HttpError(400, 'Invalid booking reference');
     if (!transactionId) throw new HttpError(400, 'Missing payment transaction id');
-    if (!seats.length || seats.length > 10) throw new HttpError(400, 'Invalid seat selection');
 
-    const { route_slug, operator_slug, departure_time, travel_date } = parseTripKey(body.trip_key);
-    if (!route_slug || !operator_slug || !departure_time || !travel_date) {
-      throw new HttpError(400, 'Invalid trip');
+    const legRaws = Array.isArray(body.legs) && body.legs.length ? body.legs : [body];
+    if (legRaws.length > 4) throw new HttpError(400, 'Too many legs in one booking');
+    const legs = legRaws.map((raw) => normalizeLeg(raw));
+    for (const leg of legs) {
+      assertOwnActiveHold(leg.tripKey, leg.travel_date, leg.seats, caller.id);
     }
-    const tripKey = String(body.trip_key);
-    assertOwnActiveHold(tripKey, travel_date, seats, caller.id);
 
     const duplicate = sqlite.prepare('SELECT id FROM booking WHERE booking_ref = ?').get(bookingRef);
     if (duplicate) throw new HttpError(409, 'This booking reference was already used');
 
-    const schedule = sqlite
-      .prepare(
-        `SELECT * FROM schedule
-           WHERE route_slug = ? AND operator_slug = ? AND departure_time = ?
-             AND active = 1 AND COALESCE(operator_status, 'approved') = 'approved'
-           LIMIT 1`,
-      )
-      .get(route_slug, operator_slug, departure_time);
-    if (!schedule) throw new HttpError(409, 'This departure is no longer available');
-
-    const route = sqlite.prepare('SELECT * FROM route WHERE slug = ?').get(route_slug) || null;
-    const operator = sqlite.prepare('SELECT * FROM operator WHERE slug = ?').get(operator_slug) || null;
-    const setting = sqlite.prepare('SELECT * FROM platform_setting LIMIT 1').get() || null;
-
-    let coupon = null;
-    const couponCode = String(body.coupon_code || '').trim();
-    if (couponCode) {
-      coupon = sqlite.prepare('SELECT * FROM coupon WHERE UPPER(code) = UPPER(?)').get(couponCode) || null;
-      if (!coupon) throw new HttpError(400, 'We cannot apply that code.');
+    const groupRefRaw = String(body.group_ref || '').trim();
+    let groupRef = null;
+    if (groupRefRaw) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(groupRefRaw)) {
+        throw new HttpError(400, 'Invalid trip group reference');
+      }
+      groupRef = groupRefRaw;
+    } else if (legs.length > 1) {
+      groupRef = randomUUID();
     }
 
     for (const field of ['contact_name', 'contact_email', 'contact_phone']) {
@@ -204,28 +256,70 @@ export function createPaymentsRouter() {
     if (!/^\S+@\S+\.\S+$/.test(String(body.contact_email || ''))) {
       throw new HttpError(400, 'Invalid contact email');
     }
-    const passengers = normalizePassengers(body.passengers, seats);
-    if (Number(body.passenger_count) !== seats.length) {
-      throw new HttpError(400, 'Passenger count does not match the seats');
+
+    let coupon = null;
+    const couponCode = String(body.coupon_code || '').trim();
+    if (couponCode) {
+      coupon = sqlite.prepare('SELECT * FROM coupon WHERE UPPER(code) = UPPER(?)').get(couponCode) || null;
+      if (!coupon) throw new HttpError(400, 'We cannot apply that code.');
     }
 
-    const quote = quoteBooking({ schedule, route, operator, setting, coupon, travelDate: travel_date, seats });
-    assertCouponUsable(coupon, quote.gross, todayISO());
+    const setting = sqlite.prepare('SELECT * FROM platform_setting LIMIT 1').get() || null;
+
+    const legQuotes = legs.map((leg) => {
+      const schedule = sqlite
+        .prepare(
+          `SELECT * FROM schedule
+             WHERE route_slug = ? AND operator_slug = ? AND departure_time = ?
+               AND active = 1 AND COALESCE(operator_status, 'approved') = 'approved'
+             LIMIT 1`,
+        )
+        .get(leg.route_slug, leg.operator_slug, leg.departure_time);
+      if (!schedule) throw new HttpError(409, 'This departure is no longer available');
+      const route = sqlite.prepare('SELECT * FROM route WHERE slug = ?').get(leg.route_slug) || null;
+      const operator = sqlite.prepare('SELECT * FROM operator WHERE slug = ?').get(leg.operator_slug) || null;
+      const quote = quoteBooking({
+        schedule,
+        route,
+        operator,
+        setting,
+        coupon: null,
+        travelDate: leg.travel_date,
+        seats: leg.seats,
+      });
+      return { leg, schedule, operator, quote };
+    });
+
+    const currencies = [...new Set(legQuotes.map((item) => item.quote.currency))];
+    if (currencies.length !== 1) {
+      throw new HttpError(400, 'Every leg of this booking must use the same currency');
+    }
+    const currency = currencies[0];
+    const grossTotal = legQuotes.reduce((sum, item) => sum + item.quote.gross, 0);
+    assertCouponUsable(coupon, grossTotal, todayISO());
+    const discount = coupon ? discountFor(coupon, grossTotal) : 0;
+    const paidTotal = Math.max(grossTotal - discount, 0);
+    const priced = legQuotes.map((item, index) => {
+      const amount = Math.max(item.quote.gross - (index === 0 ? discount : 0), 0);
+      const split = commissionSplit(amount, item.quote.percent);
+      return { ...item, amount, fee: split.fee, net: split.net };
+    });
 
     const data = await verifyFlutterwave(transactionId, process.env.FLW_SECRET_KEY);
     if (data.status !== 'successful') throw new HttpError(402, 'This payment was not completed');
     if (String(data.tx_ref) !== bookingRef) {
       throw new HttpError(402, 'Payment reference does not match this booking');
     }
-    if (String(data.currency || '').toUpperCase() !== quote.currency.toUpperCase()) {
+    if (String(data.currency || '').toUpperCase() !== currency.toUpperCase()) {
       throw new HttpError(402, 'Payment currency does not match this booking');
     }
-    if (Math.round(Number(data.amount)) !== quote.amount) {
+    if (Math.round(Number(data.amount)) !== paidTotal) {
       throw new HttpError(402, 'Payment amount does not match this booking');
     }
 
+    const refs = [bookingRef, ...priced.slice(1).map(() => nextBookingRef())];
     const now = new Date().toISOString();
-    const bookingId = randomUUID();
+    const paymentTx = String(data.id ?? transactionId);
 
     const insertBooking = sqlite.prepare(
       `INSERT INTO booking (
@@ -234,8 +328,8 @@ export function createPaymentsRouter() {
          departure_time, duration_minutes, bus_class, seats, passengers, passenger_count,
          contact_name, contact_email, contact_phone,
          amount, currency, coupon_code, discount_amount, commission_percent, platform_fee, operator_net,
-         payment_provider, payment_ref, payment_tx_id, paid_at, validated, created_date, created_by_id
-       ) VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+         payment_provider, payment_ref, payment_tx_id, paid_at, validated, created_date, created_by_id, group_ref
+       ) VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
     );
     const insertHold = sqlite.prepare(
       `INSERT INTO departure_seat (
@@ -244,97 +338,72 @@ export function createPaymentsRouter() {
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
-    const seatsJson = JSON.stringify(seats);
-    const passengersJson = JSON.stringify(passengers);
+    const bookings = sqlite.transaction(() =>
+      priced.map((item, index) => {
+        const bookingId = randomUUID();
+        const seatsJson = JSON.stringify(item.leg.seats);
+        const passengersJson = JSON.stringify(item.leg.passengers);
+        sqlite
+          .prepare('DELETE FROM departure_seat WHERE trip_key = ? AND travel_date = ? AND holder_id = ?')
+          .run(item.leg.tripKey, item.leg.travel_date, caller.id);
+        assertSeatsAvailable(item.leg.tripKey, item.leg.travel_date, item.leg.seats);
+        insertBooking.run(
+          bookingId,
+          refs[index],
+          item.leg.tripKey,
+          item.leg.route_slug,
+          item.leg.travel_date,
+          item.schedule.origin_city || '',
+          item.schedule.destination_city || '',
+          item.schedule.operator_name || '',
+          item.schedule.operator_slug,
+          item.schedule.owner_email || item.operator?.owner_email || '',
+          item.schedule.departure_time,
+          item.schedule.duration_minutes ?? null,
+          item.schedule.bus_class || '',
+          seatsJson,
+          passengersJson,
+          item.leg.seats.length,
+          String(body.contact_name).trim(),
+          String(body.contact_email).trim(),
+          String(body.contact_phone).trim(),
+          item.amount,
+          currency,
+          index === 0 ? couponCode : '',
+          index === 0 ? discount : 0,
+          item.quote.percent,
+          item.fee,
+          item.net,
+          'flutterwave',
+          bookingRef,
+          paymentTx,
+          now,
+          now,
+          caller.id,
+          groupRef,
+        );
+        insertHold.run(
+          randomUUID(),
+          item.leg.tripKey,
+          item.leg.travel_date,
+          item.leg.route_slug,
+          item.schedule.operator_slug,
+          item.schedule.operator_name || '',
+          item.schedule.departure_time,
+          seatsJson,
+          item.leg.seats.length,
+          now,
+          caller.id,
+        );
+        return sqlite.prepare('SELECT * FROM booking WHERE id = ?').get(bookingId);
+      }),
+    )();
 
-    const booking = sqlite.transaction(() => {
-      sqlite
-        .prepare('DELETE FROM departure_seat WHERE trip_key = ? AND travel_date = ? AND holder_id = ?')
-        .run(tripKey, travel_date, caller.id);
-      assertSeatsAvailable(tripKey, travel_date, seats);
-      insertBooking.run(
-        bookingId,
-        bookingRef,
-        tripKey,
-        route_slug,
-        travel_date,
-        schedule.origin_city || '',
-        schedule.destination_city || '',
-        schedule.operator_name || '',
-        schedule.operator_slug,
-        schedule.owner_email || operator?.owner_email || '',
-        schedule.departure_time,
-        schedule.duration_minutes ?? null,
-        schedule.bus_class || '',
-        seatsJson,
-        passengersJson,
-        seats.length,
-        String(body.contact_name).trim(),
-        String(body.contact_email).trim(),
-        String(body.contact_phone).trim(),
-        quote.amount,
-        quote.currency,
-        couponCode,
-        quote.discount,
-        quote.percent,
-        quote.fee,
-        quote.net,
-        'flutterwave',
-        bookingRef,
-        String(data.id ?? transactionId),
-        now,
-        now,
-        caller.id,
-      );
-      insertHold.run(
-        randomUUID(),
-        tripKey,
-        travel_date,
-        route_slug,
-        schedule.operator_slug,
-        schedule.operator_name || '',
-        schedule.departure_time,
-        seatsJson,
-        seats.length,
-        now,
-        caller.id,
-      );
-      return sqlite.prepare('SELECT * FROM booking WHERE id = ?').get(bookingId);
-    })();
-
-    void sendBookingConfirmation(booking);
+    for (const booking of bookings) void sendBookingConfirmation(booking);
 
     res.json({
-      id: booking.id,
-      booking_ref: booking.booking_ref,
-      status: booking.status,
-      trip_key: booking.trip_key,
-      route_slug: booking.route_slug,
-      travel_date: booking.travel_date,
-      origin_city: booking.origin_city,
-      destination_city: booking.destination_city,
-      operator_name: booking.operator_name,
-      operator_slug: booking.operator_slug,
-      departure_time: booking.departure_time,
-      duration_minutes: booking.duration_minutes === null ? null : Number(booking.duration_minutes),
-      bus_class: booking.bus_class,
-      seats: JSON.parse(booking.seats),
-      passengers: JSON.parse(booking.passengers),
-      passenger_count: Number(booking.passenger_count),
-      contact_name: booking.contact_name,
-      contact_email: booking.contact_email,
-      contact_phone: booking.contact_phone,
-      amount: Number(booking.amount),
-      currency: booking.currency,
-      coupon_code: booking.coupon_code,
-      discount_amount: Number(booking.discount_amount),
-      commission_percent: Number(booking.commission_percent),
-      platform_fee: Number(booking.platform_fee),
-      operator_net: Number(booking.operator_net),
-      payment_provider: booking.payment_provider,
-      payment_ref: booking.payment_ref,
-      paid_at: booking.paid_at,
-      created_date: booking.created_date,
+      ...serializeBooking(bookings[0]),
+      bookings: bookings.map(serializeBooking),
     });
   });
 

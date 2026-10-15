@@ -57,9 +57,12 @@ export default function Checkout() {
     );
   }
 
+  const legs = Array.isArray(draft.legs) && draft.legs.length ? draft.legs : [draft];
+  const isReturn = legs.length > 1;
+  const totalAmount = legs.reduce((sum, leg) => sum + Number(leg.amount || 0), 0);
   const payConfigured = looksConfigured(payKey);
-  const discount = coupon ? discountFor(coupon, draft.amount) : 0;
-  const paid = Math.max(draft.amount - discount, 0);
+  const discount = coupon ? discountFor(coupon, totalAmount) : 0;
+  const paid = Math.max(totalAmount - discount, 0);
 
   const handleSuccess = async (bookingRef, response) => {
     finished.current = true;
@@ -71,13 +74,16 @@ export default function Checkout() {
         body: JSON.stringify({
           booking_ref: bookingRef,
           transaction_id: response?.transaction_id ? String(response.transaction_id) : '',
-          trip_key: draft.trip_key,
-          seats: draft.seats,
-          passengers: draft.passengers,
-          passenger_count: draft.passenger_count,
-          contact_name: draft.contact_name,
-          contact_email: draft.contact_email,
-          contact_phone: draft.contact_phone,
+          legs: legs.map((leg) => ({
+            trip_key: leg.trip_key,
+            seats: leg.seats,
+            passengers: leg.passengers,
+            passenger_count: leg.passenger_count,
+          })),
+          group_ref: draft.group_ref || '',
+          contact_name: legs[legs.length - 1].contact_name,
+          contact_email: legs[legs.length - 1].contact_email,
+          contact_phone: legs[legs.length - 1].contact_phone,
           coupon_code: coupon?.code || '',
         }),
       }).then(async (res) => {
@@ -111,14 +117,14 @@ export default function Checkout() {
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, amount: draft.amount, currency: draft.currency }),
+        body: JSON.stringify({ code, amount: totalAmount, currency: legs[0].currency }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setCouponNote(body.error || 'We cannot apply that code.');
       } else {
         setCoupon(body);
-        setCouponNote(`${body.code} applied — you save ${formatMoney(discountFor(body, draft.amount), draft.currency)}.`);
+        setCouponNote(`${body.code} applied — you save ${formatMoney(discountFor(body, totalAmount), legs[0].currency)}.`);
       }
     } catch {
       setCouponNote('We cannot apply that code.');
@@ -130,37 +136,42 @@ export default function Checkout() {
     setError('');
     setNotice('');
     setBusy(true);
-    try {
-      const hold = await fetch('/api/seats/hold', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trip_key: draft.trip_key, seats: draft.seats }),
-      });
-      const holdBody = await hold.json().catch(() => ({}));
-      if (!hold.ok) {
-        setError(holdBody.error || 'We could not hold your seats. Please pick your seats again.');
+    for (const leg of legs) {
+      try {
+        const hold = await fetch('/api/seats/hold', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trip_key: leg.trip_key, seats: leg.seats }),
+        });
+        const holdBody = await hold.json().catch(() => ({}));
+        if (!hold.ok) {
+          setError(holdBody.error || 'We could not hold your seats. Please pick your seats again.');
+          setBusy(false);
+          return;
+        }
+      } catch {
+        setError('We could not hold your seats. Please check your connection and try again.');
         setBusy(false);
         return;
       }
-    } catch {
-      setError('We could not hold your seats. Please check your connection and try again.');
-      setBusy(false);
-      return;
     }
 
     const bookingRef = makeBookingRef();
+    const description = legs
+      .map((leg) => `${leg.origin_city} to ${leg.destination_city} · ${leg.travel_date} · ${leg.seats.join(', ')}`)
+      .join(' + ');
     const started = payWithFlutterwave({
       publicKey: payKey,
       txRef: bookingRef,
       amount: paid,
-      currency: draft.currency,
+      currency: legs[0].currency,
       customer: {
-        email: draft.contact_email,
-        phone_number: draft.contact_phone,
-        name: draft.contact_name,
+        email: legs[legs.length - 1].contact_email,
+        phone_number: legs[legs.length - 1].contact_phone,
+        name: legs[legs.length - 1].contact_name,
       },
-      description: `${draft.origin_city} to ${draft.destination_city} · ${draft.travel_date} · ${draft.seats.join(', ')}`,
+      description,
       onSuccess: (response) => handleSuccess(bookingRef, response),
       onClose: () => {
         if (!finished.current) {
@@ -178,17 +189,10 @@ export default function Checkout() {
     finished.current = false;
   };
 
-  const labels = buildTrip(
-    {
-      route_slug: draft.route_slug,
-      operator_slug: draft.operator_slug,
-      departure_time: draft.departure_time,
-      duration_minutes: draft.duration_minutes,
-      origin_city: draft.origin_city,
-      destination_city: draft.destination_city,
-    },
-    draft.travel_date
-  );
+  const legLabels = legs.map((leg, index) => ({
+    leg,
+    label: isReturn ? (index === 0 ? 'Outbound' : 'Return') : null,
+  }));
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
@@ -201,16 +205,25 @@ export default function Checkout() {
         <div className="space-y-6">
           <Card className="rounded-2xl border-border p-5 shadow-sm">
             <h2 className="font-display text-lg font-bold">Travellers</h2>
-            <div className="mt-4 space-y-3">
-              {draft.passengers.map((passenger) => (
-                <div key={passenger.seat} className="flex items-center justify-between gap-4 border-b border-border/70 pb-3 last:border-0 last:pb-0">
-                  <div>
-                    <p className="text-sm font-semibold">{passenger.name}</p>
-                    <p className="text-xs text-muted-foreground">{passenger.phone || 'No mobile number added'}</p>
-                  </div>
-                  <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">
-                    Seat {passenger.seat}
-                  </span>
+            <div className="mt-4 space-y-4">
+              {legLabels.map(({ leg, label }) => (
+                <div key={leg.trip_key} className="space-y-3">
+                  {label && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {label} · {leg.origin_city} → {leg.destination_city} · {leg.travel_date}
+                    </p>
+                  )}
+                  {leg.passengers.map((passenger) => (
+                    <div key={`${leg.trip_key}-${passenger.seat}`} className="flex items-center justify-between gap-4 border-b border-border/70 pb-3 last:border-0 last:pb-0">
+                      <div>
+                        <p className="text-sm font-semibold">{passenger.name}</p>
+                        <p className="text-xs text-muted-foreground">{passenger.phone || 'No mobile number added'}</p>
+                      </div>
+                      <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-primary">
+                        Seat {passenger.seat}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -219,7 +232,7 @@ export default function Checkout() {
           <Card className="rounded-2xl border-border p-5 shadow-sm">
             <h2 className="font-display text-lg font-bold">Ticket sent to</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {draft.contact_name} · {draft.contact_email} · {draft.contact_phone}
+              {legs[legs.length - 1].contact_name} · {legs[legs.length - 1].contact_email} · {legs[legs.length - 1].contact_phone}
             </p>
           </Card>
 
@@ -244,27 +257,53 @@ export default function Checkout() {
 
         <aside>
           <div className="sticky top-24 space-y-4">
-            <TripSummary
-              operatorName={draft.operator_name}
-              originCity={draft.origin_city}
-              destinationCity={draft.destination_city}
-              travelDate={draft.travel_date}
-              departureLabel={labels.departureLabel}
-              arrivalLabel={labels.arrivalLabel}
-              nextDay={labels.nextDay}
-              durationMinutes={draft.duration_minutes}
-              busClass={draft.bus_class}
-              seats={draft.seats}
-              passengerCount={draft.passenger_count}
-            />
+            {legLabels.map(({ leg, label }) => {
+              const labels = buildTrip(
+                {
+                  route_slug: leg.route_slug,
+                  operator_slug: leg.operator_slug,
+                  departure_time: leg.departure_time,
+                  duration_minutes: leg.duration_minutes,
+                  origin_city: leg.origin_city,
+                  destination_city: leg.destination_city,
+                },
+                leg.travel_date
+              );
+              return (
+                <div key={leg.trip_key} className="space-y-4">
+                  {label && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                  )}
+                  <TripSummary
+                    operatorName={leg.operator_name}
+                    originCity={leg.origin_city}
+                    destinationCity={leg.destination_city}
+                    travelDate={leg.travel_date}
+                    departureLabel={labels.departureLabel}
+                    arrivalLabel={labels.arrivalLabel}
+                    nextDay={labels.nextDay}
+                    durationMinutes={leg.duration_minutes}
+                    busClass={leg.bus_class}
+                    seats={leg.seats}
+                    passengerCount={leg.passenger_count}
+                  />
+                </div>
+              );
+            })}
 
             <Card className="rounded-2xl border-border p-5 shadow-sm">
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>
-                  {formatMoney(draft.price, draft.currency)} × {draft.passenger_count}
-                </span>
-                <span>{formatMoney(draft.amount, draft.currency)}</span>
-              </div>
+              {legLabels.map(({ leg, label }) => (
+                <div
+                  key={leg.trip_key}
+                  className="flex items-center justify-between gap-3 text-sm text-muted-foreground"
+                >
+                  <span>
+                    {label ? `${label} · ` : ''}
+                    {formatMoney(leg.price, leg.currency)} × {leg.passenger_count}
+                  </span>
+                  <span>{formatMoney(leg.amount, leg.currency)}</span>
+                </div>
+              ))}
 
               <div className="mt-4 flex gap-2">
                 <Input
@@ -282,14 +321,14 @@ export default function Checkout() {
               {discount > 0 && (
                 <div className="mt-3 flex items-center justify-between text-sm font-semibold text-[hsl(var(--trust))]">
                   <span>Discount · {coupon.code}</span>
-                  <span>-{formatMoney(discount, draft.currency)}</span>
+                  <span>-{formatMoney(discount, legs[0].currency)}</span>
                 </div>
               )}
 
               <Separator className="my-3" />
               <div className="flex items-end justify-between">
                 <span className="font-medium">Total</span>
-                <span className="font-display text-2xl font-extrabold">{formatMoney(paid, draft.currency)}</span>
+                <span className="font-display text-2xl font-extrabold">{formatMoney(paid, legs[0].currency)}</span>
               </div>
 
               {!payConfigured && (
@@ -311,7 +350,7 @@ export default function Checkout() {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Waiting for payment…
                   </>
                 ) : (
-                  <>Pay {formatMoney(paid, draft.currency)}</>
+                  <>Pay {formatMoney(paid, legs[0].currency)}</>
                 )}
               </Button>
 

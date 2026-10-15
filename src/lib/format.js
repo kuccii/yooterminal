@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 
 export function formatMoney(amount, currency) {
   if (amount === null || amount === undefined || amount === '') return '';
@@ -31,4 +31,8 @@ export function formatDateTime(iso) {
 
 export function todayISO() {
   return format(new Date(), 'yyyy-MM-dd');
+}
+
+export function shiftDays(iso, days) {
+  return format(addDays(parseISO(iso), days), 'yyyy-MM-dd');
 }

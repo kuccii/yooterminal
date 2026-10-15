@@ -39,7 +39,7 @@ const ENTITIES = {
       commission_percent: 'number', platform_fee: 'number', operator_net: 'number',
       payment_provider: 'text', payment_ref: 'text', payment_tx_id: 'text', paid_at: 'text',
       validated: 'boolean', validated_at: 'text', validated_by: 'text', cancelled_at: 'text',
-      refund_status: 'text', refund_tx_id: 'text', cancelled_by: 'text',
+      refund_status: 'text', refund_tx_id: 'text', cancelled_by: 'text', group_ref: 'text',
     },
     access: { read: 'own', create: 'admin', update: 'creatorOrOwner', delete: 'admin' },
   },
@@ -160,7 +160,7 @@ const WRITE_PROTECTED = {
     seats: 'admin', passengers: 'admin', passenger_count: 'admin', amount: 'admin', currency: 'admin',
     coupon_code: 'admin', discount_amount: 'admin', commission_percent: 'admin', platform_fee: 'admin',
     operator_net: 'admin', payment_provider: 'admin', payment_ref: 'admin', payment_tx_id: 'admin',
-    paid_at: 'admin', status: 'admin',
+    paid_at: 'admin', status: 'admin', group_ref: 'admin',
   },
   Operator: {
     status: 'admin', commission_percent: 'admin', owner_email: 'admin', slug: 'admin',
