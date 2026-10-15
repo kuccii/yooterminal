@@ -131,9 +131,17 @@ export const db = {
         body: JSON.stringify({ token: resetToken, newPassword }),
       });
     },
-    loginWithProvider(provider, returnTo) {
-      window.location.href =
-        `${API_BASE}/auth/social/${provider}?callbackURL=${encodeURIComponent(returnTo || '/')}`;
+    async loginWithProvider(provider, returnTo) {
+      const data = await request('/auth/sign-in/social', {
+        method: 'POST',
+        body: JSON.stringify({
+          provider,
+          callbackURL: returnTo || '/',
+        }),
+      });
+      if (data && data.url) {
+        window.location.href = data.url;
+      }
     },
   },
 };
