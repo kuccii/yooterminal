@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import OperatorManifest from '@/components/operator/OperatorManifest';
 import { formatMoney, todayISO } from '@/lib/format';
 
 const FILTERS = [
@@ -26,6 +27,7 @@ export function waNumber(phone, country) {
 }
 
 export default function OperatorBookingsTab({ operator }) {
+  const [mode, setMode] = useState('list');
   const [filter, setFilter] = useState('upcoming');
   const [search, setSearch] = useState('');
   const [searched, setSearched] = useState('');
@@ -86,43 +88,68 @@ export default function OperatorBookingsTab({ operator }) {
             <Users className="h-4 w-4 text-primary" /> Booked tickets
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every ticket sold on your departures. Check passengers in or message them on WhatsApp / email.
+            {mode === 'list'
+              ? 'Every ticket sold on your departures. Check passengers in or message them on WhatsApp / email.'
+              : 'Per-departure passenger roster for trip day. Print it or export it for the crew.'}
           </p>
         </div>
-        <form
-          className="flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSearched(search.trim());
-          }}
-        >
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value.toUpperCase())}
-            placeholder="Search ref BL…"
-            className="h-9 w-44 font-mono uppercase"
-          />
-          <Button type="submit" variant="outline" size="icon" className="rounded-xl">
-            <Search className="h-4 w-4" />
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex gap-2">
+            {['list', 'manifest'].map((entry) => (
+              <button
+                key={entry}
+                onClick={() => setMode(entry)}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                  mode === entry ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                {entry === 'list' ? 'List' : 'Manifest'}
+              </button>
+            ))}
+          </div>
+          {mode === 'list' && (
+            <form
+              className="flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSearched(search.trim());
+              }}
+            >
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value.toUpperCase())}
+                placeholder="Search ref BL…"
+                className="h-9 w-44 font-mono uppercase"
+              />
+              <Button type="submit" variant="outline" size="icon" className="rounded-xl">
+                <Search className="h-4 w-4" />
+              </Button>
+            </form>
+          )}
+        </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {FILTERS.map((entry) => (
-          <button
-            key={entry.id}
-            onClick={() => setFilter(entry.id)}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-              filter === entry.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      {mode === 'manifest' ? (
+        <div className="mt-5">
+          <OperatorManifest operator={operator} />
+        </div>
+      ) : (
+        <>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {FILTERS.map((entry) => (
+              <button
+                key={entry.id}
+                onClick={() => setFilter(entry.id)}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                  filter === entry.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
 
-      <div className="mt-5 space-y-3">
+          <div className="mt-5 space-y-3">
         {loading && <p className="text-sm text-muted-foreground">Loading tickets…</p>}
         {!loading &&
           bookings.map((booking) => (
@@ -186,7 +213,9 @@ export default function OperatorBookingsTab({ operator }) {
             {searched ? `No tickets match “${searched}”.` : 'No tickets in this view yet.'}
           </p>
         )}
-      </div>
+          </div>
+        </>
+      )}
     </Card>
   );
 }

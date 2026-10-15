@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatCard from '@/components/manage/StatCard';
+import { downloadCsv, joinList } from '@/lib/csv';
 import { formatMoney } from '@/lib/format';
 
 const SERIES_FILLS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
@@ -101,19 +102,6 @@ function moneyLines(map) {
   return Object.entries(map).map(([currency, value]) => (
     <p key={currency}>{formatMoney(value, currency)}</p>
   ));
-}
-
-function csvEscape(value) {
-  const text = value == null ? '' : String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-function joinList(list) {
-  if (!Array.isArray(list)) return '';
-  return list
-    .map((item) => (item && typeof item === 'object' ? item.name || '' : String(item)))
-    .filter(Boolean)
-    .join('; ');
 }
 
 const CSV_COLUMNS = [
@@ -279,19 +267,7 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
   const paidCount = state.totals.reduce((total, row) => total + (Number(row.count) || 0), 0);
 
   const exportCsv = () => {
-    const lines = [CSV_COLUMNS.map((column) => csvEscape(column.label)).join(',')];
-    state.rows.forEach((row) => {
-      lines.push(CSV_COLUMNS.map((column) => csvEscape(column.value(row))).join(','));
-    });
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `reports-${operator.slug}-${period}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`reports-${operator.slug}-${period}.csv`, CSV_COLUMNS, state.rows);
   };
 
   if (state.loading) {

@@ -95,3 +95,40 @@
     @apply font-heading tracking-tight;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .manifest-print,
+  .manifest-print * {
+    visibility: visible;
+  }
+
+  .manifest-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  .manifest-print table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .manifest-print th,
+  .manifest-print td {
+    border-bottom: 1px solid #ccc;
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 12px;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
