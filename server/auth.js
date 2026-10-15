@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { emailOTP } from 'better-auth/plugins';
+import { dash } from '@better-auth/infra';
 import { sqlite } from './db.js';
 import { sendMailSafe } from './mailer.js';
 
@@ -64,6 +65,9 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    dash({
+      apiKey: process.env.BETTER_AUTH_API_KEY,
+    }),
     emailOTP({
       sendVerificationOTP: async ({ email, otp }) => {
         if (logTokens) {
