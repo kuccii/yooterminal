@@ -117,7 +117,12 @@ export default function Checkout() {
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, amount: totalAmount, currency: legs[0].currency }),
+        body: JSON.stringify({
+          code,
+          amount: totalAmount,
+          currency: legs[0].currency,
+          operator_slugs: [...new Set(legs.map((leg) => leg.operator_slug).filter(Boolean))],
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {

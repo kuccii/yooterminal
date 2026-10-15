@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
 import { sqlite } from './db.js';
-import { auth } from './auth.js';
 
 const now = new Date().toISOString();
 const newId = () => crypto.randomUUID();
@@ -20,24 +19,26 @@ function insert(table, row) {
     .run(...columns.map((c) => (typeof row[c] === 'boolean' ? (row[c] ? 1 : 0) : row[c])));
 }
 
-async function ensureUser({ email, password, name, role }) {
-  const existing = sqlite.prepare('SELECT id, role FROM user WHERE email = ?').get(email);
+function ensureUser({ email, name, role }) {
+  const normalizedEmail = String(email).toLowerCase();
+  const existing = sqlite.prepare('SELECT id, role FROM app_user WHERE email = ?').get(normalizedEmail);
   if (existing) {
     const existingRank = ROLE_RANK[existing.role] ?? 0;
     const wantedRank = ROLE_RANK[role] ?? 0;
     if (wantedRank > existingRank) {
-      sqlite.prepare('UPDATE user SET role = ? WHERE id = ?').run(role, existing.id);
+      sqlite.prepare('UPDATE app_user SET role = ?, updated_date = ? WHERE id = ?')
+        .run(role, new Date().toISOString(), existing.id);
       console.log(`[seed] User ${email} already exists (${existing.role}) - promoted to ${role}.`);
     } else {
       console.log(`[seed] User ${email} already exists (${existing.role}) - leaving as is.`);
     }
     return existing.id;
   }
-  const result = await auth.api.signUpEmail({ body: { email, password, name } });
-  const id = result.user.id;
-  sqlite.prepare('UPDATE user SET role = ?, emailVerified = 1 WHERE id = ?').run(role, id);
-  console.log(`[seed] Created ${role}: ${email} (password: ${password})`);
-  return id;
+  const result = sqlite
+    .prepare('INSERT INTO app_user (email, full_name, role, created_date) VALUES (?, ?, ?, ?)')
+    .run(normalizedEmail, name || email, role, new Date().toISOString());
+  console.log(`[seed] Seeded ${role}: ${email} (sign in via Clerk to activate)`);
+  return String(result.lastInsertRowid);
 }
 
 const CITIES = [
@@ -195,9 +196,9 @@ const BOOKINGS = [
 async function seed() {
   console.log('[seed] Seeding database...');
 
-  await ensureUser({ email: 'admin@example.com', password: 'admin1234', name: 'Platform Admin', role: 'admin' });
-  await ensureUser({ email: 'operator@example.com', password: 'operator1234', name: 'Savannah Ops', role: 'operator' });
-  await ensureUser({ email: 'kigali.ops@example.com', password: 'operator1234', name: 'Kigali Ops', role: 'operator' });
+  ensureUser({ email: 'admin@example.com', name: 'Platform Admin', role: 'admin' });
+  ensureUser({ email: 'operator@example.com', name: 'Savannah Ops', role: 'operator' });
+  ensureUser({ email: 'kigali.ops@example.com', name: 'Kigali Ops', role: 'operator' });
 
   for (const table of ['departure_seat', 'booking', 'coupon', 'review', 'banner', 'schedule', 'bus', 'route', 'operator', 'city', 'platform_setting']) {
     clearTable(table);
@@ -224,7 +225,7 @@ async function seed() {
   for (const booking of BOOKINGS) insert('booking', { ...booking, id: newId(), created_date: now });
 
   console.log(`[seed] Done - ${CITIES.length} cities, ${ROUTES.length} routes, ${SCHEDULES.length} schedules, ${OPERATORS.length} operators.`);
-  console.log('[seed] Admin login: admin@example.com / admin1234 - Operator login: operator@example.com / operator1234');
+  console.log('[seed] Seeded roles in app_user: admin@example.com (admin), operator@example.com and kigali.ops@example.com (operator). Sign in via Clerk to activate.');
 }
 
 seed()

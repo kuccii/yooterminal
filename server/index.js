@@ -2,8 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { toNodeHandler } from 'better-auth/node';
-import { auth, googleEnabled } from './auth.js';
+import { getCaller, googleEnabled } from './auth.js';
 import { createEntityRouter, HttpError } from './entities.js';
 import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
@@ -20,10 +19,6 @@ const PORT = Number(process.env.PORT) || 3001;
 const app = express();
 app.disable('x-powered-by');
 
-// Better Auth handles everything under /api/auth itself. Mounted before
-// express.json() so it can read the raw request body.
-app.all('/api/auth/*splat', toNodeHandler(auth));
-
 app.use(express.json());
 
 app.get('/api/config', (req, res) => {
@@ -31,6 +26,12 @@ app.get('/api/config', (req, res) => {
     google: googleEnabled,
     flutterwavePublicKey: process.env.FLW_PUBLIC_KEY || '',
   });
+});
+
+app.get('/api/me', async (req, res) => {
+  const caller = await getCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Not signed in' });
+  res.json({ id: caller.id, email: caller.email, role: caller.role, full_name: caller.name });
 });
 
 app.get('/api/health', (req, res) => {

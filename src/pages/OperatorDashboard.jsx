@@ -1,12 +1,13 @@
 import db from '@/api/client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart3, BusFront, CalendarClock, LayoutDashboard, ScanLine, Ticket, UsersRound, Wallet } from 'lucide-react';
+import { BarChart3, BusFront, CalendarClock, LayoutDashboard, ScanLine, Tag, Ticket, UsersRound, Wallet } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import DashboardLayout from '@/components/DashboardLayout';
 import OperatorAvatar from '@/components/OperatorAvatar';
 import OperatorBookingsTab from '@/components/operator/OperatorBookingsTab';
+import OperatorCouponsTab from '@/components/operator/OperatorCouponsTab';
 import OperatorCustomersTab from '@/components/operator/OperatorCustomersTab';
 import OperatorEarningsTab from '@/components/operator/OperatorEarningsTab';
 import OperatorFleetTab from '@/components/operator/OperatorFleetTab';
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { id: 'earnings', label: 'Earnings', icon: Wallet },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'customers', label: 'Customers', icon: UsersRound },
+  { id: 'coupons', label: 'Discount codes', icon: Tag },
 ];
 
 export default function OperatorDashboard() {
@@ -119,6 +121,8 @@ export default function OperatorDashboard() {
         return <OperatorReportsTab operator={operator} routes={state.routes} />;
       case 'customers':
         return <OperatorCustomersTab operator={operator} />;
+      case 'coupons':
+        return <OperatorCouponsTab operator={operator} />;
       case 'timetable':
       default:
         return <OperatorTimetableTab operator={operator} routes={state.routes} />;

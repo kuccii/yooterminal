@@ -13,6 +13,7 @@ import {
   quoteBooking,
   sortedSeats,
 } from './booking.js';
+import { countCouponRedemptions, findCouponForCart } from './coupons.js';
 import { writeAuditLog } from './audit.js';
 import { sendBookingConfirmation, sendCancellation } from './notifications.js';
 
@@ -260,7 +261,7 @@ export function createPaymentsRouter() {
     let coupon = null;
     const couponCode = String(body.coupon_code || '').trim();
     if (couponCode) {
-      coupon = sqlite.prepare('SELECT * FROM coupon WHERE UPPER(code) = UPPER(?)').get(couponCode) || null;
+      coupon = findCouponForCart(couponCode, legs.map((leg) => leg.operator_slug));
       if (!coupon) throw new HttpError(400, 'We cannot apply that code.');
     }
 
@@ -296,7 +297,8 @@ export function createPaymentsRouter() {
     }
     const currency = currencies[0];
     const grossTotal = legQuotes.reduce((sum, item) => sum + item.quote.gross, 0);
-    assertCouponUsable(coupon, grossTotal, todayISO());
+    const usedRedemptions = coupon ? countCouponRedemptions(coupon.code, coupon.operator_slug || null) : 0;
+    assertCouponUsable(coupon, grossTotal, todayISO(), { used: usedRedemptions, currency });
     const discount = coupon ? discountFor(coupon, grossTotal) : 0;
     const paidTotal = Math.max(grossTotal - discount, 0);
     const priced = legQuotes.map((item, index) => {

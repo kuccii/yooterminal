@@ -135,12 +135,18 @@ export function priceFor(schedule, travelDate) {
   return surcharge ? Math.round(base * (1 + surcharge / 100)) : base;
 }
 
-export function assertCouponUsable(coupon, gross, today) {
+export function assertCouponUsable(coupon, gross, today, { used = 0, currency = '' } = {}) {
   if (!coupon) return;
   if (!coupon.active) throw new HttpError(400, 'We cannot apply that code.');
   if (coupon.expires_at && coupon.expires_at < today) throw new HttpError(400, 'That code has expired.');
   if (coupon.min_amount && gross < Number(coupon.min_amount)) {
     throw new HttpError(400, 'That code needs a larger booking to apply.');
+  }
+  if (coupon.currency && currency && coupon.currency !== currency) {
+    throw new HttpError(400, 'That code cannot be used for this currency.');
+  }
+  if (coupon.max_redemptions && used >= Number(coupon.max_redemptions)) {
+    throw new HttpError(400, 'That code has reached its usage limit.');
   }
 }
 

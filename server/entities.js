@@ -72,8 +72,13 @@ const ENTITIES = {
     columns: {
       code: 'text', description: 'text', discount_type: 'text', discount_value: 'number',
       min_amount: 'number', currency: 'text', expires_at: 'text', active: 'boolean',
+      operator_slug: 'text', operator_owner_email: 'text', max_redemptions: 'number',
     },
-    access: { read: 'admin' },
+    access: {
+      read: 'own',
+      create: 'ownerOrAdmin', update: 'ownerOrAdmin', delete: 'ownerOrAdmin',
+      ownerEmailField: 'operator_owner_email',
+    },
   },
   DepartureSeat: {
     table: 'departure_seat',
@@ -174,6 +179,7 @@ const WRITE_PROTECTED = {
     operator_slug: 'admin', operator_name: 'admin',
   },
   Bus: { owner_email: 'admin', operator_slug: 'admin', operator_name: 'admin' },
+  Coupon: { code: 'admin', operator_slug: 'admin', operator_owner_email: 'admin' },
 };
 
 class HttpError extends Error {

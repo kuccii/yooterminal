@@ -54,15 +54,13 @@ function entityClient(name) {
 
 async function currentUser() {
   try {
-    const data = await request('/auth/get-session');
-    const user = data && data.user;
-    if (!user) return null;
+    const data = await request('/me');
+    if (!data || !data.email) return null;
     return {
-      id: user.id,
-      email: user.email,
-      role: user.role || 'user',
-      full_name: user.name || '',
-      emailVerified: Boolean(user.emailVerified),
+      id: data.id,
+      email: data.email,
+      role: data.role || 'user',
+      full_name: data.full_name || '',
     };
   } catch {
     return null;
@@ -80,69 +78,6 @@ export const db = {
       return (await currentUser()) !== null;
     },
     me: currentUser,
-    async loginViaEmailPassword(email, password) {
-      await request('/auth/sign-in/email', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      return currentUser();
-    },
-    async register({ email, password, name }) {
-      await request('/auth/sign-up/email', {
-        method: 'POST',
-        body: JSON.stringify({ email, password, name: name || email.split('@')[0] }),
-      });
-      await this.resendOtp(email);
-    },
-    async verifyOtp({ email, otpCode }) {
-      await request('/auth/sign-in/email-otp', {
-        method: 'POST',
-        body: JSON.stringify({ email, otp: otpCode }),
-      });
-      // Sessions are httpOnly cookies — nothing to store client-side.
-      return { access_token: 'cookie-session' };
-    },
-    async resendOtp(email) {
-      // 'sign-in' type OTP both verifies the email and creates the session,
-      // matching the register -> verifyOtp -> signed-in frontend flow.
-      await request('/auth/email-otp/send-verification-otp', {
-        method: 'POST',
-        body: JSON.stringify({ email, type: 'sign-in' }),
-      });
-    },
-    setToken() {
-      // Sessions are httpOnly cookies managed by the backend.
-    },
-    async logout() {
-      await request('/auth/sign-out', { method: 'POST' });
-    },
-    async resetPasswordRequest(email) {
-      await request('/auth/request-password-reset', {
-        method: 'POST',
-        body: JSON.stringify({
-          email,
-          redirectTo: `${window.location.origin}/reset-password`,
-        }),
-      });
-    },
-    async resetPassword({ resetToken, newPassword }) {
-      await request('/auth/reset-password', {
-        method: 'POST',
-        body: JSON.stringify({ token: resetToken, newPassword }),
-      });
-    },
-    async loginWithProvider(provider, returnTo) {
-      const data = await request('/auth/sign-in/social', {
-        method: 'POST',
-        body: JSON.stringify({
-          provider,
-          callbackURL: returnTo || '/',
-        }),
-      });
-      if (data && data.url) {
-        window.location.href = data.url;
-      }
-    },
   },
 };
 
