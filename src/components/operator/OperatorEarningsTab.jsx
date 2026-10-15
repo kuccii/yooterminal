@@ -1,14 +1,18 @@
 import db from '@/api/client';
 
 import React, { useEffect, useState } from 'react';
-import { BadgeDollarSign, Percent, Ticket, Users } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { BadgeDollarSign, Download, Percent, Printer, Ticket, Users } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatCard from '@/components/manage/StatCard';
 import { commissionPercentFor } from '@/lib/commission';
+import { downloadCsv } from '@/lib/csv';
 import { formatMoney } from '@/lib/format';
 
 function moneyValue(entries, fallback) {
@@ -23,6 +27,24 @@ function moneyValue(entries, fallback) {
   );
 }
 
+function currentMonth() {
+  return format(new Date(), 'yyyy-MM');
+}
+
+function previousMonth() {
+  const now = new Date();
+  const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const month = now.getMonth() === 0 ? 12 : now.getMonth();
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function monthRange(month) {
+  const [year, mon] = month.split('-').map(Number);
+  const endYear = mon === 12 ? year + 1 : year;
+  const endMonth = mon === 12 ? 1 : mon + 1;
+  return { $gte: `${month}-01`, $lt: `${endYear}-${String(endMonth).padStart(2, '0')}-01` };
+}
+
 export default function OperatorEarningsTab({ operator, setting }) {
   const [state, setState] = useState({
     loading: true,
@@ -30,6 +52,8 @@ export default function OperatorEarningsTab({ operator, setting }) {
     byRoute: [],
     departures: [],
   });
+  const [month, setMonth] = useState(previousMonth);
+  const [statement, setStatement] = useState({ loading: true, rows: [], count: 0, tickets: 0 });
 
   useEffect(() => {
     let active = true;
@@ -135,6 +159,42 @@ export default function OperatorEarningsTab({ operator, setting }) {
       active = false;
     };
   }, [operator.slug]);
+
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      setStatement((prev) => ({ ...prev, loading: true }));
+      const aggregate = await db.entities.Booking.aggregate({
+        query: { operator_slug: operator.slug, status: 'paid', paid_at: monthRange(month) },
+        groupBy: 'currency',
+        sum: ['amount', 'platform_fee', 'operator_net', 'passenger_count'],
+      });
+      if (!active) return;
+      const rows = (aggregate.rows || []).map((row) => {
+        const gross = Number(row.sum_amount) || 0;
+        const fee = Number(row.sum_platform_fee) || 0;
+        return {
+          currency: row.currency || 'UGX',
+          gross,
+          fee,
+          net: row.sum_operator_net ?? gross - fee,
+          count: Number(row.count) || 0,
+          tickets: Number(row.sum_passenger_count) || 0,
+        };
+      });
+      setStatement({
+        loading: false,
+        rows,
+        count: rows.reduce((total, row) => total + row.count, 0),
+        tickets: rows.reduce((total, row) => total + row.tickets, 0),
+      });
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [operator.slug, month]);
 
   if (state.loading) {
     return (
@@ -262,6 +322,99 @@ export default function OperatorEarningsTab({ operator, setting }) {
           </div>
         </Card>
       </div>
+
+      <Card className="rounded-3xl border-border p-6 shadow-sm">
+        <div className="no-print flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 font-display text-lg font-bold">
+              <BadgeDollarSign className="h-4 w-4 text-primary" /> Payout statement
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Monthly reconciliation: gross fares, the platform commission, and your net payout.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Month</p>
+              <Input
+                type="month"
+                value={month}
+                max={currentMonth()}
+                onChange={(event) => setMonth(event.target.value || previousMonth())}
+                className="w-44"
+              />
+            </div>
+            <Button variant="outline" onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" /> Print
+            </Button>
+            <Button
+              variant="outline"
+              disabled={statement.loading || !statement.rows.length}
+              onClick={() =>
+                downloadCsv(`statement-${operator.slug}-${month}.csv`, [
+                  { label: 'period', value: () => month },
+                  { label: 'operator_slug', value: () => operator.slug },
+                  { label: 'currency', value: (row) => row.currency },
+                  { label: 'gross', value: (row) => row.gross },
+                  { label: 'commission', value: (row) => row.fee },
+                  { label: 'net', value: (row) => row.net },
+                  { label: 'paid_bookings', value: (row) => row.count },
+                  { label: 'tickets', value: (row) => row.tickets },
+                ], statement.rows)
+              }
+            >
+              <Download className="mr-2 h-4 w-4" /> Export CSV
+            </Button>
+          </div>
+        </div>
+
+        {statement.loading ? (
+          <Skeleton className="mt-5 h-32 w-full rounded-2xl" />
+        ) : (
+          <div className="manifest-print mt-5">
+            <div className="border-b border-border pb-4">
+              <h3 className="font-display text-lg font-extrabold">{operator.name}</h3>
+              <p className="mt-0.5 text-sm font-semibold">
+                Payout statement · {format(parseISO(`${month}-01`), 'MMMM yyyy')}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {statement.count} paid booking{statement.count === 1 ? '' : 's'} · {statement.tickets} ticket
+                {statement.tickets === 1 ? '' : 's'} · generated {format(new Date(), 'yyyy-MM-dd HH:mm')}
+              </p>
+            </div>
+            {statement.rows.length ? (
+              <div className="mt-4 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Currency</TableHead>
+                      <TableHead className="text-right">Gross fares</TableHead>
+                      <TableHead className="text-right">Platform commission</TableHead>
+                      <TableHead className="text-right">Net payout</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {statement.rows.map((row) => (
+                      <TableRow key={row.currency}>
+                        <TableCell className="text-sm font-semibold">{row.currency}</TableCell>
+                        <TableCell className="text-right text-sm">{formatMoney(row.gross, row.currency)}</TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {formatMoney(row.fee, row.currency)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm font-semibold">
+                          {formatMoney(row.net, row.currency)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">No paid bookings in this month.</p>
+            )}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
