@@ -1,0 +1,17 @@
+{
+  "name": "YooTerminal — Cheap bus tickets in Uganda & Rwanda",
+  "short_name": "YooTerminal",
+  "description": "Compare and book bus tickets across Uganda and Rwanda. Instant e-tickets with secure payment.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/images/yooterminal-mark.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

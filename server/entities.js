@@ -51,6 +51,7 @@ const ENTITIES = {
       model: 'text', bus_class: 'text', seats_total: 'number', seat_layout: 'text',
       amenities: 'json', status: 'text', notes: 'text',
     },
+    hiddenPublic: ['owner_email'],
     access: {
       read: 'public', create: 'ownerOrAdmin', update: 'ownerOrAdmin', delete: 'ownerOrAdmin',
       ownerEmailField: 'owner_email',
@@ -93,6 +94,7 @@ const ENTITIES = {
       rating: 'number', review_count: 'number', featured: 'boolean', status: 'text',
       commission_percent: 'number', owner_email: 'text',
     },
+    hiddenPublic: ['owner_email'],
     access: { read: 'public' },
   },
   PlatformSetting: {
@@ -135,6 +137,7 @@ const ENTITIES = {
       bus_class: 'text', seats_total: 'number', seat_layout: 'text', bus_plate: 'text',
       amenities: 'json', active: 'boolean',
     },
+    hiddenPublic: ['owner_email'],
     access: {
       read: 'public', create: 'ownerOrAdmin', update: 'ownerOrAdmin', delete: 'ownerOrAdmin',
       ownerEmailField: 'owner_email',
@@ -185,7 +188,7 @@ const isAdmin = (caller) => Boolean(caller && caller.role === 'admin');
 // ---------------------------------------------------------------------------
 // Row encode/decode — SQLite stores booleans as 0/1 and arrays/objects as JSON
 // ---------------------------------------------------------------------------
-function decodeRow(entity, row) {
+function decodeRow(entity, row, caller = null) {
   if (!row) return null;
   const out = { ...row };
   for (const [field, kind] of Object.entries(entity.columns)) {
@@ -201,6 +204,14 @@ function decodeRow(entity, row) {
     } else if (kind === 'number') out[field] = Number(value);
   }
   for (const field of entity.hidden || []) delete out[field];
+  if (!isAdmin(caller)) {
+    for (const field of entity.hiddenPublic || []) {
+      const value = out[field];
+      const ownerMatch = caller && value
+        && String(caller.email || '').toLowerCase() === String(value).toLowerCase();
+      if (!ownerMatch) delete out[field];
+    }
+  }
   return out;
 }
 
@@ -395,7 +406,7 @@ function listHandler(entity) {
       + parseSort(entity, req.query.sort) + ' LIMIT ?';
     params.push(limit);
 
-    const rows = sqlite.prepare(sql).all(...params).map((row) => decodeRow(entity, row));
+    const rows = sqlite.prepare(sql).all(...params).map((row) => decodeRow(entity, row, caller));
     const items = fields
       ? rows.map((row) => Object.fromEntries(
         Object.entries(row).filter(([key]) => key === 'id' || fields.includes(key)),
@@ -411,7 +422,7 @@ function getHandler(entity) {
     const where = withReadScope(entity, req.caller, params, 'id = ?');
     const row = sqlite.prepare(`SELECT * FROM "${entity.table}" WHERE ${where}`).get(...params);
     if (!row) throw new HttpError(404, 'Not found');
-    res.json(decodeRow(entity, row));
+    res.json(decodeRow(entity, row, req.caller));
   };
 }
 
@@ -443,7 +454,7 @@ function createHandler(entity) {
       .run(...values);
 
     const row = sqlite.prepare(`SELECT * FROM "${entity.table}" WHERE id = ?`).get(id);
-    res.json(decodeRow(entity, row));
+    res.json(decodeRow(entity, row, caller));
   };
 }
 
@@ -451,7 +462,7 @@ function updateHandler(entity) {
   return (req, res) => {
     const raw = sqlite.prepare(`SELECT * FROM "${entity.table}" WHERE id = ?`).get(req.params.id);
     if (!raw) throw new HttpError(404, 'Not found');
-    const existing = decodeRow(entity, raw);
+    const existing = decodeRow(entity, raw, req.caller);
     assertWriteAllowed(entity, req.caller, { payload: req.body || {}, existing, action: 'update' });
     assertFieldWriteAllowed(entity.name, req.caller, req.body || {}, existing);
 
@@ -472,7 +483,7 @@ function updateHandler(entity) {
       sqlite.prepare(`UPDATE "${entity.table}" SET ${sets.join(', ')} WHERE id = ?`).run(...values);
     }
     const row = sqlite.prepare(`SELECT * FROM "${entity.table}" WHERE id = ?`).get(req.params.id);
-    res.json(decodeRow(entity, row));
+    res.json(decodeRow(entity, row, req.caller));
   };
 }
 
@@ -498,7 +509,7 @@ function updateManyHandler(entity) {
     const rows = sqlite.prepare(`SELECT * FROM "${entity.table}"${where ? ` WHERE ${where}` : ''}`).all(...params);
     let updated = 0;
     for (const raw of rows) {
-      const existing = decodeRow(entity, raw);
+      const existing = decodeRow(entity, raw, req.caller);
       assertWriteAllowed(entity, req.caller, { payload: $set, existing, action: 'update' });
       assertFieldWriteAllowed(entity.name, req.caller, $set, existing);
       const sets = [];
