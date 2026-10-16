@@ -4,7 +4,7 @@ import { ArrowLeft, LogOut } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import ThemeToggle from '@/components/ThemeToggle';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Sidebar,
   SidebarContent,
@@ -90,6 +90,7 @@ function DashboardShell({ items, active, onNavigate, title, subtitle, user, chil
         <SidebarFooter className="gap-0 border-t border-sidebar-border p-0">
           <div className="flex items-center gap-2.5 px-3 pt-3">
             <Avatar className="h-9 w-9">
+              {user?.logo_path ? <AvatarImage src={user.logo_path} alt="" /> : null}
               <AvatarFallback className="bg-primary text-[11px] font-bold text-primary-foreground">
                 {initialsFor(user)}
               </AvatarFallback>

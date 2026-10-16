@@ -9,7 +9,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/AuthContext';
+
+const initialsFor = (user) => {
+  const source = user?.full_name || user?.email || '';
+  const parts = source.split(/[\s@._-]+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part.charAt(0)).join('').toUpperCase() || '?';
+};
 
 export default function UserMenu() {
   const { user, logout } = useAuth();
@@ -21,6 +28,12 @@ export default function UserMenu() {
           type="button"
           className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-semibold transition hover:border-primary"
         >
+          <Avatar className="h-6 w-6 shrink-0">
+            {user?.logo_path ? <AvatarImage src={user.logo_path} alt="" /> : null}
+            <AvatarFallback className="bg-primary text-[9px] font-bold text-primary-foreground">
+              {initialsFor(user)}
+            </AvatarFallback>
+          </Avatar>
           <span className="max-w-[110px] truncate">{user?.full_name || user?.email || 'Account'}</span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>

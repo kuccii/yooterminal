@@ -148,7 +148,7 @@ export default function AccountSettingsPanel({ className = '' }) {
       const updated = await db.profile.uploadLogo({ contentType: file.type, dataBase64 });
       applyLogo(updated.logo_path);
     } catch (err) {
-      setLogoError(err.message || 'We could not upload your logo. Please try again.');
+      setLogoError(err.message || 'We could not upload your photo. Please try again.');
     } finally {
       setLogoUploading(false);
     }
@@ -161,7 +161,7 @@ export default function AccountSettingsPanel({ className = '' }) {
       await db.profile.removeLogo();
       applyLogo(null);
     } catch (err) {
-      setLogoError(err.message || 'We could not remove your logo. Please try again.');
+      setLogoError(err.message || 'We could not remove your photo. Please try again.');
     } finally {
       setLogoUploading(false);
     }
@@ -178,12 +178,17 @@ export default function AccountSettingsPanel({ className = '' }) {
   }
 
   const roleLabel = ROLE_LABELS[profile?.role] || 'User';
+  const photoHelperCopy =
+    profile?.role === 'operator'
+      ? 'Shown on your operator dashboard header. JPEG, PNG, WebP or SVG, up to 2 MB.'
+      : 'Shown on your account. JPEG, PNG, WebP or SVG, up to 2 MB.';
 
   return (
     <div className={`space-y-6 ${className}`}>
       <Card className="rounded-3xl border-border p-6 shadow-sm">
         <div className="flex items-center gap-4">
           <Avatar className="h-14 w-14">
+            {profile?.logo_path ? <AvatarImage src={profile?.logo_path} alt="" /> : null}
             <AvatarFallback className="bg-primary text-sm font-bold text-primary-foreground">
               {initialsFor(profile)}
             </AvatarFallback>
@@ -236,67 +241,63 @@ export default function AccountSettingsPanel({ className = '' }) {
         </form>
       </Card>
 
-      {profile?.role === 'operator' && (
-        <Card className="rounded-3xl border-border p-6 shadow-sm">
-          <div className="flex items-center gap-2">
-            <ImageIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            <h2 className="font-display text-lg font-extrabold tracking-tight">Operator logo</h2>
-          </div>
-          <div className="mt-4 flex items-start gap-4">
-            <Avatar className="h-16 w-16 shrink-0 rounded-xl">
-              {profile.logo_path ? (
-                <AvatarImage src={profile.logo_path} alt="" className="rounded-xl object-cover" />
-              ) : null}
-              <AvatarFallback className="rounded-xl bg-primary text-sm font-bold text-primary-foreground">
-                {initialsFor(profile)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm text-muted-foreground">
-                Shown on your operator dashboard header. JPEG, PNG, WebP or SVG, up to 2 MB.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
-                  className="hidden"
-                  onChange={handleLogoPick}
-                />
+      <Card className="rounded-3xl border-border p-6 shadow-sm">
+        <div className="flex items-center gap-2">
+          <ImageIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <h2 className="font-display text-lg font-extrabold tracking-tight">Profile photo</h2>
+        </div>
+        <div className="mt-4 flex items-start gap-4">
+          <Avatar className="h-16 w-16 shrink-0 rounded-xl">
+            {profile?.logo_path ? (
+              <AvatarImage src={profile?.logo_path} alt="" className="rounded-xl object-cover" />
+            ) : null}
+            <AvatarFallback className="rounded-xl bg-primary text-sm font-bold text-primary-foreground">
+              {initialsFor(profile)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-muted-foreground">{photoHelperCopy}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                className="hidden"
+                onChange={handleLogoPick}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 font-medium"
+                disabled={logoUploading}
+                onClick={() => logoInputRef.current?.click()}
+              >
+                {logoUploading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4 mr-2" />
+                )}
+                {profile?.logo_path ? 'Replace' : 'Upload'}
+              </Button>
+              {profile?.logo_path && (
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 font-medium"
+                  className="h-10 font-medium text-destructive hover:bg-destructive/10"
                   disabled={logoUploading}
-                  onClick={() => logoInputRef.current?.click()}
+                  onClick={handleLogoRemove}
                 >
-                  {logoUploading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Upload className="w-4 h-4 mr-2" />
-                  )}
-                  {profile.logo_path ? 'Replace' : 'Upload'}
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Remove
                 </Button>
-                {profile.logo_path && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 font-medium text-destructive hover:bg-destructive/10"
-                    disabled={logoUploading}
-                    onClick={handleLogoRemove}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Remove
-                  </Button>
-                )}
-              </div>
+              )}
             </div>
           </div>
-          {logoError && (
-            <div className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{logoError}</div>
-          )}
-        </Card>
-      )}
+        </div>
+        {logoError && (
+          <div className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{logoError}</div>
+        )}
+      </Card>
 
       <Card className="rounded-3xl border-border p-6 shadow-sm">
         <div className="flex items-center gap-2">

@@ -163,7 +163,6 @@ export function createProfileRouter() {
   router.post('/logo', async (req, res) => {
     const caller = await getCaller(req);
     if (!caller) throw new HttpError(401, 'Not signed in');
-    if (caller.role !== 'operator') throw new HttpError(403, 'Only operator accounts can upload a logo.');
 
     const contentType = typeof req.body?.content_type === 'string' ? req.body.content_type.trim().toLowerCase() : '';
     const type = LOGO_TYPES[contentType];
@@ -207,7 +206,6 @@ export function createProfileRouter() {
   router.delete('/logo', async (req, res) => {
     const caller = await getCaller(req);
     if (!caller) throw new HttpError(401, 'Not signed in');
-    if (caller.role !== 'operator') throw new HttpError(403, 'Only operator accounts can remove a logo.');
 
     const previous = storedLogoPath(caller.id);
     sqlite

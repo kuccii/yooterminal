@@ -20,7 +20,7 @@ dist-ssr
 # Local SQLite database (recreated by `npm run seed`)
 server/data/
 
-# Runtime uploads (operator logos)
+# Runtime uploads (profile photos)
 server/uploads/
 
 # Editor directories and files
