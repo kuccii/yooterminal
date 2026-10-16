@@ -4,6 +4,7 @@ import { ArrowLeft, LogOut } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import ThemeToggle from '@/components/ThemeToggle';
+import NotificationBell from '@/components/NotificationBell';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Sidebar,
@@ -129,6 +130,7 @@ function DashboardShell({ items, active, onNavigate, title, subtitle, user, chil
               <p className="hidden truncate text-sm text-muted-foreground md:block">{subtitle}</p>
             )}
           </div>
+          <NotificationBell className="shrink-0" />
           <ThemeToggle className="shrink-0" />
         </header>
         <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6 md:py-8">{children}</div>

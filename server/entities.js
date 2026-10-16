@@ -167,6 +167,15 @@ const ENTITIES = {
     columns: { title: 'text', description: 'text', sort_order: 'number', active: 'boolean' },
     access: { read: 'public' },
   },
+  Notification: {
+    table: 'notification',
+    required: ['user_id', 'type', 'title', 'message'],
+    columns: {
+      user_id: 'text', type: 'text', title: 'text', message: 'text',
+      link: 'text', read: 'boolean',
+    },
+    access: { read: 'own', create: 'admin', update: 'admin', delete: 'admin' },
+  },
 };
 
 // Columns present on every table but not part of any entity's payload map.

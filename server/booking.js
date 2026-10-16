@@ -1,5 +1,6 @@
 import { sqlite } from './db.js';
 import { HttpError } from './entities.js';
+import { createNotification } from './notify.js';
 
 const SEPARATOR = '~';
 const PEAK_DAYS = [0, 5, 6];
@@ -55,6 +56,26 @@ export function takenSeatLabels(tripKey, travelDate, now = Date.now()) {
 export const HOLD_TTL_MS = 10 * 60 * 1000;
 
 export function sweepExpiredHolds(tripKey = null, travelDate = null, now = Date.now()) {
+  const expired = tripKey && travelDate
+    ? sqlite
+        .prepare(
+          'SELECT * FROM departure_seat WHERE trip_key = ? AND travel_date = ? AND expires_at IS NOT NULL AND expires_at <= ?',
+        )
+        .all(tripKey, travelDate, now)
+    : sqlite
+        .prepare('SELECT * FROM departure_seat WHERE expires_at IS NOT NULL AND expires_at <= ?')
+        .all(now);
+
+  for (const hold of expired) {
+    void createNotification({
+      userId: hold.created_by_id,
+      type: 'seat_hold_expiring',
+      title: 'Seat hold expired',
+      message: `Your seat hold for ${hold.travel_date} has expired.`,
+      link: '/trips',
+    });
+  }
+
   if (tripKey && travelDate) {
     return sqlite
       .prepare(

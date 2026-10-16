@@ -4,6 +4,7 @@ import { BusFront, MapPin } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 import UserMenu from '@/components/UserMenu';
 import ThemeToggle from '@/components/ThemeToggle';
+import NotificationBell from '@/components/NotificationBell';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +46,10 @@ export default function Header() {
             Help
           </Link>
           {isAuthenticated ? (
-            <UserMenu />
+            <>
+              <NotificationBell />
+              <UserMenu />
+            </>
           ) : (
             <Link
               to="/login"

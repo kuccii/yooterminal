@@ -327,6 +327,17 @@ const APP_TABLES = {
       created_date TEXT,
       created_by_id TEXT
     )`,
+  notification: `
+    CREATE TABLE IF NOT EXISTS notification (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      link TEXT,
+      read INTEGER NOT NULL DEFAULT 0,
+      created_date TEXT
+    )`,
 };
 
 for (const ddl of Object.values(APP_TABLES)) {

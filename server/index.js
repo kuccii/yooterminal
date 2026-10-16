@@ -11,10 +11,12 @@ import { createAdminRouter } from './admin.js';
 import { createSeatsRouter } from './seats.js';
 import { createProfileRouter } from './profile.js';
 import { createSiteContentRouter } from './siteContent.js';
+import { createNotificationsRouter } from './notify.js';
 import { UPLOADS_DIR } from './uploads.js';
 import { sweepExpiredHolds } from './booking.js';
 import { runRefundQueue } from './payments.js';
 import { sendDepartureReminder } from './notifications.js';
+import { createNotification } from './notify.js';
 import { sqlite } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +66,7 @@ app.use('/api/admin', createAdminRouter());
 app.use('/api/seats', createSeatsRouter());
 app.use('/api/profile', createProfileRouter());
 app.use('/api/site-content', createSiteContentRouter());
+app.use('/api/notifications', createNotificationsRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {
@@ -126,6 +129,13 @@ function runDepartureReminders() {
     for (const booking of rows) {
       sqlite.prepare('UPDATE booking SET reminder_sent = 1 WHERE id = ?').run(booking.id);
       void sendDepartureReminder(booking);
+      void createNotification({
+        userId: booking.created_by_id,
+        type: 'departure_reminder',
+        title: 'Departure tomorrow',
+        message: `Reminder: your bus leaves tomorrow from ${booking.origin_city || ''} to ${booking.destination_city || ''}.`,
+        link: `/booking/${booking.booking_ref}`,
+      });
     }
   } catch (error) {
     console.error('[server] Departure reminder run failed:', error);
