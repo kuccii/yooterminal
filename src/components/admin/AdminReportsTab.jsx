@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { BadgeDollarSign, Bus, Percent, Ticket, TrendingUp } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+import ReportDrilldown, { StatusPill, routeLabel, seatsLabel } from '@/components/ReportDrilldown';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,6 +12,23 @@ import StatCard from '@/components/manage/StatCard';
 import { formatMoney } from '@/lib/format';
 
 const SERIES_FILLS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
+
+const BOOKING_FIELDS = [
+  'booking_ref',
+  'status',
+  'route_slug',
+  'travel_date',
+  'departure_time',
+  'origin_city',
+  'destination_city',
+  'operator_name',
+  'seats',
+  'passenger_count',
+  'amount',
+  'currency',
+  'platform_fee',
+  'paid_at',
+];
 
 function moneyValue(entries, fallback) {
   if (entries.length === 1) return formatMoney(entries[0].value, entries[0].currency);
@@ -30,6 +48,18 @@ function moneyLines(map) {
   ));
 }
 
+function avgFare(row) {
+  return Object.entries(row.revenue)
+    .map(([currency, value]) => formatMoney(row.tickets ? value / row.tickets : 0, currency))
+    .join(' · ');
+}
+
+function commissionRate(fee, gross) {
+  return Object.entries(gross)
+    .map(([currency, value]) => `${currency} ${value ? Math.round(((fee[currency] || 0) / value) * 100) : 0}%`)
+    .join(' · ');
+}
+
 export default function AdminReportsTab({ operators, routes }) {
   const [state, setState] = useState({
     loading: true,
@@ -38,7 +68,10 @@ export default function AdminReportsTab({ operators, routes }) {
     byDate: [],
     byRoute: [],
     byOperator: [],
+    bookings: [],
+    capped: false,
   });
+  const [drill, setDrill] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -52,7 +85,7 @@ export default function AdminReportsTab({ operators, routes }) {
       const currencyRows = totals.rows || [];
       const currencies = [...new Set(currencyRows.map((row) => row.currency || 'UGX'))];
 
-      const [dateAggs, routeAggs, operatorAggs] = await Promise.all([
+      const [dateAggs, routeAggs, operatorAggs, bookings] = await Promise.all([
         Promise.all(
           currencies.map((currency) =>
             db.entities.Booking.aggregate({
@@ -86,6 +119,7 @@ export default function AdminReportsTab({ operators, routes }) {
             })
           )
         ),
+        db.entities.Booking.filter({ status: 'paid' }, { sort: '-paid_at', limit: 1000, fields: BOOKING_FIELDS }),
       ]);
       if (!active) return;
 
@@ -132,6 +166,8 @@ export default function AdminReportsTab({ operators, routes }) {
       });
       const byOperator = [...operatorMap.values()].sort((a, b) => b.tickets - a.tickets);
 
+      const bookingRows = bookings.items || [];
+
       setState({
         loading: false,
         totals: currencyRows,
@@ -139,6 +175,8 @@ export default function AdminReportsTab({ operators, routes }) {
         byDate,
         byRoute,
         byOperator,
+        bookings: bookingRows,
+        capped: bookingRows.length >= 1000,
       });
     })();
 
@@ -160,10 +198,38 @@ export default function AdminReportsTab({ operators, routes }) {
   const tickets = state.totals.reduce((total, row) => total + (Number(row.sum_passenger_count) || 0), 0);
   const pending = operators.filter((operator) => (operator.status || 'pending') !== 'approved').length;
 
+  const bookingsColumns = [
+    { key: 'travel_date', label: 'Travel date', render: (row) => row.travel_date },
+    { key: 'origin_city', label: 'Route', render: (row) => routeLabel(row, routes) },
+    { key: 'booking_ref', label: 'Ref', render: (row) => row.booking_ref },
+    {
+      key: 'passenger_count',
+      label: 'Tickets',
+      align: 'right',
+      render: (row) => row.passenger_count ?? seatsLabel(row),
+    },
+    { key: 'amount', label: 'Amount', align: 'right', render: (row) => formatMoney(row.amount, row.currency) },
+    { key: 'platform_fee', label: 'Commission', align: 'right', render: (row) => formatMoney(row.platform_fee, row.currency) },
+    { key: 'status', label: 'Status', render: (row) => <StatusPill status={row.status} /> },
+  ];
+
+  const operatorColumns = [
+    { key: 'name', label: 'Operator', render: (row) => row.name },
+    { key: 'status', label: 'Status', render: (row) => <StatusPill status={row.status} /> },
+    { key: 'country', label: 'Country', render: (row) => row.country || '—' },
+  ];
+
+  const closeDrill = (open) => !open && setDrill(null);
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Tickets sold" value={tickets.toLocaleString('en-US')} icon={Ticket} />
+        <StatCard
+          label="Tickets sold"
+          value={tickets.toLocaleString('en-US')}
+          icon={Ticket}
+          onClick={() => setDrill('tickets')}
+        />
         <StatCard
           label="Gross booking value"
           value={moneyValue(
@@ -172,6 +238,7 @@ export default function AdminReportsTab({ operators, routes }) {
           )}
           hint={`${totalBookings} paid booking${totalBookings === 1 ? '' : 's'}`}
           icon={BadgeDollarSign}
+          onClick={() => setDrill('revenue')}
         />
         <StatCard
           label="Commission earned"
@@ -181,12 +248,14 @@ export default function AdminReportsTab({ operators, routes }) {
           )}
           hint="Platform share of gross fares"
           icon={Percent}
+          onClick={() => setDrill('commission')}
         />
         <StatCard
           label="Operators needing review"
           value={pending}
           hint={`${operators.length} operators on the network`}
           icon={Bus}
+          onClick={() => setDrill('operators')}
         />
       </div>
 
@@ -232,6 +301,7 @@ export default function AdminReportsTab({ operators, routes }) {
                 <TableRow>
                   <TableHead>Route</TableHead>
                   <TableHead>Tickets</TableHead>
+                  <TableHead>Avg fare</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                 </TableRow>
               </TableHeader>
@@ -244,13 +314,14 @@ export default function AdminReportsTab({ operators, routes }) {
                         {route ? `${route.origin_city} → ${route.destination_city}` : row.route_slug}
                       </TableCell>
                       <TableCell className="text-sm">{row.tickets}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{avgFare(row)}</TableCell>
                       <TableCell className="text-right text-sm">{moneyLines(row.revenue)}</TableCell>
                     </TableRow>
                   );
                 })}
                 {!state.byRoute.length && (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                    <TableCell colSpan={4} className="text-sm text-muted-foreground">
                       Nothing sold yet.
                     </TableCell>
                   </TableRow>
@@ -270,8 +341,10 @@ export default function AdminReportsTab({ operators, routes }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Operator</TableHead>
+                  <TableHead>Tickets</TableHead>
                   <TableHead>Gross</TableHead>
                   <TableHead>Commission</TableHead>
+                  <TableHead>Rate</TableHead>
                   <TableHead className="text-right">Payout</TableHead>
                 </TableRow>
               </TableHeader>
@@ -279,8 +352,10 @@ export default function AdminReportsTab({ operators, routes }) {
                 {state.byOperator.map((row) => (
                   <TableRow key={row.operator_name}>
                     <TableCell className="text-sm font-medium">{row.operator_name || 'Unknown operator'}</TableCell>
+                    <TableCell className="text-sm">{row.tickets}</TableCell>
                     <TableCell className="text-sm">{moneyLines(row.gross)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{moneyLines(row.fee)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{commissionRate(row.fee, row.gross)}</TableCell>
                     <TableCell className="text-right text-sm font-semibold">
                       {Object.entries(row.gross).map(([currency, gross]) => (
                         <p key={currency}>{formatMoney(gross - (row.fee[currency] || 0), currency)}</p>
@@ -290,7 +365,7 @@ export default function AdminReportsTab({ operators, routes }) {
                 ))}
                 {!state.byOperator.length && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="text-sm text-muted-foreground">
                       Nothing settled yet.
                     </TableCell>
                   </TableRow>
@@ -300,6 +375,75 @@ export default function AdminReportsTab({ operators, routes }) {
           </div>
         </Card>
       </div>
+
+      {drill === 'tickets' && (
+        <ReportDrilldown
+          open
+          onOpenChange={closeDrill}
+          title="Tickets sold"
+          description={`${tickets.toLocaleString('en-US')} paid tickets across ${totalBookings} booking${
+            totalBookings === 1 ? '' : 's'
+          }.`}
+          columns={bookingsColumns}
+          rows={state.bookings}
+          initialSort="travel_date"
+          rowKey={(row) => row.id}
+          footer={
+            state.capped ? (
+              <p className="mt-3 text-xs text-muted-foreground">Based on the latest 1,000 paid bookings.</p>
+            ) : null
+          }
+        />
+      )}
+
+      {drill === 'revenue' && (
+        <ReportDrilldown
+          open
+          onOpenChange={closeDrill}
+          title="Gross booking value"
+          description="Every paid booking, largest fare first."
+          columns={bookingsColumns}
+          rows={state.bookings}
+          initialSort="amount"
+          rowKey={(row) => row.id}
+          footer={
+            state.capped ? (
+              <p className="mt-3 text-xs text-muted-foreground">Based on the latest 1,000 paid bookings.</p>
+            ) : null
+          }
+        />
+      )}
+
+      {drill === 'commission' && (
+        <ReportDrilldown
+          open
+          onOpenChange={closeDrill}
+          title="Commission earned"
+          description="The platform fee kept on each paid booking, largest first."
+          columns={bookingsColumns}
+          rows={state.bookings}
+          initialSort="platform_fee"
+          rowKey={(row) => row.id}
+          footer={
+            state.capped ? (
+              <p className="mt-3 text-xs text-muted-foreground">Based on the latest 1,000 paid bookings.</p>
+            ) : null
+          }
+        />
+      )}
+
+      {drill === 'operators' && (
+        <ReportDrilldown
+          open
+          onOpenChange={closeDrill}
+          title="Operators needing review"
+          description={`${pending} operator${pending === 1 ? '' : 's'} not yet approved.`}
+          columns={operatorColumns}
+          rows={operators.filter((operator) => (operator.status || 'pending') !== 'approved')}
+          initialSort="name"
+          rowKey={(row) => row.slug}
+        />
+      )}
     </div>
   );
 }

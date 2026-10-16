@@ -6,6 +6,7 @@ import { BadgeDollarSign, Download, Percent, Ticket, TrendingUp, Users } from 'l
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Button } from '@/components/ui/button';
+import ReportDrilldown, { StatusPill, routeLabel, seatsLabel } from '@/components/ReportDrilldown';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,6 +29,8 @@ const PERIODS = [
 
 const CUSTOMER_FIELDS = [
   'booking_ref',
+  'status',
+  'route_slug',
   'travel_date',
   'departure_time',
   'origin_city',
@@ -37,6 +40,8 @@ const CUSTOMER_FIELDS = [
   'passenger_count',
   'amount',
   'currency',
+  'platform_fee',
+  'operator_net',
   'contact_name',
   'contact_email',
   'contact_phone',
@@ -104,6 +109,12 @@ function moneyLines(map) {
   ));
 }
 
+function avgFare(row) {
+  return Object.entries(row.revenue)
+    .map(([currency, value]) => formatMoney(row.tickets ? value / row.tickets : 0, currency))
+    .join(' · ');
+}
+
 const CSV_COLUMNS = [
   { label: 'booking_ref', value: (row) => row.booking_ref },
   { label: 'travel_date', value: (row) => row.travel_date },
@@ -124,6 +135,7 @@ const CSV_COLUMNS = [
 export default function OperatorReportsTab({ operator, routes = [] }) {
   const [period, setPeriod] = useState('this_month');
   const [custom, setCustom] = useState({ from: '', to: '' });
+  const [drill, setDrill] = useState(null);
   const [state, setState] = useState({
     loading: true,
     totals: [],
@@ -266,6 +278,24 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
   const tickets = state.totals.reduce((total, row) => total + (Number(row.sum_passenger_count) || 0), 0);
   const paidCount = state.totals.reduce((total, row) => total + (Number(row.count) || 0), 0);
 
+  const bookingsColumns = [
+    { key: 'travel_date', label: 'Travel date', render: (row) => row.travel_date },
+    { key: 'origin_city', label: 'Route', render: (row) => routeLabel(row, routes) },
+    { key: 'booking_ref', label: 'Ref', render: (row) => row.booking_ref },
+    {
+      key: 'passenger_count',
+      label: 'Tickets',
+      align: 'right',
+      render: (row) => row.passenger_count ?? seatsLabel(row),
+    },
+    { key: 'amount', label: 'Amount', align: 'right', render: (row) => formatMoney(row.amount, row.currency) },
+    { key: 'platform_fee', label: 'Commission', align: 'right', render: (row) => formatMoney(row.platform_fee, row.currency) },
+    { key: 'operator_net', label: 'Net payout', align: 'right', render: (row) => formatMoney(row.operator_net, row.currency) },
+    { key: 'status', label: 'Status', render: (row) => <StatusPill status={row.status} /> },
+  ];
+
+  const closeDrill = (open) => !open && setDrill(null);
+
   const exportCsv = () => {
     downloadCsv(`reports-${operator.slug}-${period}.csv`, CSV_COLUMNS, state.rows);
   };
@@ -342,8 +372,14 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
               )}
               hint={`${paidCount} paid booking${paidCount === 1 ? '' : 's'}`}
               icon={BadgeDollarSign}
+              onClick={() => setDrill('revenue')}
             />
-            <StatCard label="Tickets sold" value={tickets.toLocaleString('en-US')} icon={Ticket} />
+            <StatCard
+              label="Tickets sold"
+              value={tickets.toLocaleString('en-US')}
+              icon={Ticket}
+              onClick={() => setDrill('tickets')}
+            />
             <StatCard
               label="Platform commission"
               value={moneyValue(
@@ -351,6 +387,7 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
                 fallbackCurrency
               )}
               icon={Percent}
+              onClick={() => setDrill('commission')}
             />
             <StatCard
               label="Net payout"
@@ -359,6 +396,7 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
                 fallbackCurrency
               )}
               icon={Users}
+              onClick={() => setDrill('payout')}
             />
           </div>
 
@@ -404,6 +442,7 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
                     <TableRow>
                       <TableHead>Route</TableHead>
                       <TableHead>Tickets</TableHead>
+                      <TableHead>Avg fare</TableHead>
                       <TableHead className="text-right">Revenue</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -416,13 +455,14 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
                             {route ? `${route.origin_city} → ${route.destination_city}` : row.route_slug}
                           </TableCell>
                           <TableCell className="text-sm">{row.tickets}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{avgFare(row)}</TableCell>
                           <TableCell className="text-right text-sm">{moneyLines(row.revenue)}</TableCell>
                         </TableRow>
                       );
                     })}
                     {!state.byRoute.length && (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                        <TableCell colSpan={4} className="text-sm text-muted-foreground">
                           Nothing sold in this period.
                         </TableCell>
                       </TableRow>
@@ -480,6 +520,86 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
               )}
             </Card>
           </div>
+
+          {drill === 'revenue' && (
+            <ReportDrilldown
+              open
+              onOpenChange={closeDrill}
+              title="Gross revenue"
+              description="Every paid booking in this period, largest fare first."
+              columns={bookingsColumns}
+              rows={state.rows}
+              initialSort="amount"
+              rowKey={(row) => row.id}
+              footer={
+                state.capped ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Based on the latest 1,000 bookings in this period.
+                  </p>
+                ) : null
+              }
+            />
+          )}
+
+          {drill === 'tickets' && (
+            <ReportDrilldown
+              open
+              onOpenChange={closeDrill}
+              title="Tickets sold"
+              description={`${tickets.toLocaleString('en-US')} paid tickets in this period, most recent first.`}
+              columns={bookingsColumns}
+              rows={state.rows}
+              initialSort="travel_date"
+              rowKey={(row) => row.id}
+              footer={
+                state.capped ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Based on the latest 1,000 bookings in this period.
+                  </p>
+                ) : null
+              }
+            />
+          )}
+
+          {drill === 'commission' && (
+            <ReportDrilldown
+              open
+              onOpenChange={closeDrill}
+              title="Platform commission"
+              description="The platform fee kept on each paid booking in this period, largest first."
+              columns={bookingsColumns}
+              rows={state.rows}
+              initialSort="platform_fee"
+              rowKey={(row) => row.id}
+              footer={
+                state.capped ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Based on the latest 1,000 bookings in this period.
+                  </p>
+                ) : null
+              }
+            />
+          )}
+
+          {drill === 'payout' && (
+            <ReportDrilldown
+              open
+              onOpenChange={closeDrill}
+              title="Net payout"
+              description="What the operator is owed per paid booking in this period, largest first."
+              columns={bookingsColumns}
+              rows={state.rows}
+              initialSort="operator_net"
+              rowKey={(row) => row.id}
+              footer={
+                state.capped ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Based on the latest 1,000 bookings in this period.
+                  </p>
+                ) : null
+              }
+            />
+          )}
         </>
       )}
     </div>
