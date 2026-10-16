@@ -40,6 +40,7 @@ const ENTITIES = {
       payment_provider: 'text', payment_ref: 'text', payment_tx_id: 'text', paid_at: 'text',
       validated: 'boolean', validated_at: 'text', validated_by: 'text', cancelled_at: 'text',
       refund_status: 'text', refund_tx_id: 'text', cancelled_by: 'text', group_ref: 'text',
+      leg_index: 'number',
     },
     access: { read: 'own', create: 'admin', update: 'creatorOrOwner', delete: 'admin' },
   },
@@ -148,6 +149,24 @@ const ENTITIES = {
       ownerEmailField: 'owner_email',
     },
   },
+  SiteContent: {
+    table: 'site_content',
+    required: ['key'],
+    columns: { key: 'text', value: 'json' },
+    access: { read: 'public' },
+  },
+  SiteFaq: {
+    table: 'site_faq',
+    required: ['question'],
+    columns: { question: 'text', answer: 'text', sort_order: 'number', active: 'boolean' },
+    access: { read: 'public' },
+  },
+  SiteFeature: {
+    table: 'site_feature',
+    required: ['title'],
+    columns: { title: 'text', description: 'text', sort_order: 'number', active: 'boolean' },
+    access: { read: 'public' },
+  },
 };
 
 // Columns present on every table but not part of any entity's payload map.
@@ -168,7 +187,7 @@ const WRITE_PROTECTED = {
     seats: 'admin', passengers: 'admin', passenger_count: 'admin', amount: 'admin', currency: 'admin',
     coupon_code: 'admin', discount_amount: 'admin', commission_percent: 'admin', platform_fee: 'admin',
     operator_net: 'admin', payment_provider: 'admin', payment_ref: 'admin', payment_tx_id: 'admin',
-    paid_at: 'admin', status: 'admin', group_ref: 'admin',
+    paid_at: 'admin', status: 'admin', group_ref: 'admin', leg_index: 'admin',
   },
   Operator: {
     status: 'admin', commission_percent: 'admin', owner_email: 'admin', slug: 'admin',

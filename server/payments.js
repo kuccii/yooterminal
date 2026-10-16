@@ -39,8 +39,8 @@ export async function attemptRefund(booking) {
   const status = await requestFlutterwaveRefund(booking.payment_tx_id, process.env.FLW_SECRET_KEY);
   const nextAttemptAt = status === 'refunded' ? null : Date.now() + refundBackoff(attempts);
   sqlite
-    .prepare('UPDATE booking SET refund_status = ?, refund_attempts = ?, refund_next_attempt_at = ? WHERE id = ?')
-    .run(status, attempts, nextAttemptAt, booking.id);
+    .prepare('UPDATE booking SET refund_status = ?, refund_attempts = ?, refund_next_attempt_at = ? WHERE payment_tx_id = ?')
+    .run(status, attempts, nextAttemptAt, booking.payment_tx_id);
   writeAuditLog({
     actorId: null,
     action: 'refund.attempt',
@@ -60,6 +60,13 @@ export async function runRefundQueue() {
       `SELECT * FROM booking
         WHERE status = 'cancelled' AND refund_status = 'refund_pending'
           AND (refund_next_attempt_at IS NULL OR refund_next_attempt_at <= ?)
+          AND id = (
+            SELECT b2.id FROM booking b2
+             WHERE b2.status = 'cancelled' AND b2.refund_status = 'refund_pending'
+               AND b2.payment_tx_id IS booking.payment_tx_id
+             ORDER BY b2.created_date ASC, b2.id ASC
+             LIMIT 1
+          )
         LIMIT 20`,
     )
     .all(now);
@@ -211,6 +218,7 @@ function serializeBooking(booking) {
     paid_at: booking.paid_at,
     created_date: booking.created_date,
     group_ref: booking.group_ref || null,
+    leg_index: booking.leg_index === null || booking.leg_index === undefined ? null : Number(booking.leg_index),
   };
 }
 
@@ -330,8 +338,9 @@ export function createPaymentsRouter() {
          departure_time, duration_minutes, bus_class, seats, passengers, passenger_count,
          contact_name, contact_email, contact_phone,
          amount, currency, coupon_code, discount_amount, commission_percent, platform_fee, operator_net,
-         payment_provider, payment_ref, payment_tx_id, paid_at, validated, created_date, created_by_id, group_ref
-       ) VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+         payment_provider, payment_ref, payment_tx_id, paid_at, validated, created_date, created_by_id, group_ref,
+         leg_index
+       ) VALUES (?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
     );
     const insertHold = sqlite.prepare(
       `INSERT INTO departure_seat (
@@ -383,6 +392,7 @@ export function createPaymentsRouter() {
           now,
           caller.id,
           groupRef,
+          index,
         );
         insertHold.run(
           randomUUID(),
@@ -422,58 +432,83 @@ export function createPaymentsRouter() {
     const isOwner = booking.created_by_id === caller.id;
     if (!isAdminCaller && !isOwner) throw new HttpError(403, 'You can only cancel your own bookings');
 
+    const groupRows = booking.group_ref
+      ? sqlite.prepare('SELECT * FROM booking WHERE group_ref = ?').all(booking.group_ref)
+      : [booking];
+    const cancelTargets = groupRows.filter((row) => row.status === 'paid');
+    const refundInFlight = groupRows.find(
+      (row) => row.refund_status === 'refunded' || row.refund_status === 'refund_pending',
+    );
+
     if (!isAdminCaller) {
-      const cutoffMs = departureDate(booking).getTime() - CANCEL_CUTOFF_HOURS * 60 * 60 * 1000;
-      if (Date.now() > cutoffMs) {
-        throw new HttpError(409, `Cancellations close ${CANCEL_CUTOFF_HOURS} hours before departure. Contact the operator for help.`);
+      for (const row of cancelTargets) {
+        const cutoffMs = departureDate(row).getTime() - CANCEL_CUTOFF_HOURS * 60 * 60 * 1000;
+        if (Date.now() > cutoffMs) {
+          throw new HttpError(409, `Cancellations close ${CANCEL_CUTOFF_HOURS} hours before departure. Contact the operator for help.`);
+        }
       }
     }
 
     const now = new Date().toISOString();
-    const seats = JSON.parse(booking.seats || '[]');
 
     const cancelTx = sqlite.transaction(() => {
-      sqlite
-        .prepare(
-          `UPDATE booking SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?
-             WHERE id = ? AND status = 'paid'`,
-        )
-        .run(now, caller.id, booking.id);
+      for (const row of cancelTargets) {
+        sqlite
+          .prepare(
+            `UPDATE booking SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?
+               WHERE id = ? AND status = 'paid'`,
+          )
+          .run(now, caller.id, row.id);
 
-      const holds = sqlite
-        .prepare('SELECT * FROM departure_seat WHERE trip_key = ? AND travel_date = ?')
-        .all(booking.trip_key, booking.travel_date);
-      const drop = new Set(seats.map(String));
-      for (const hold of holds) {
-        const kept = (JSON.parse(hold.seats || '[]')).filter((seat) => !drop.has(String(seat)));
-        if (kept.length === 0) {
-          sqlite.prepare('DELETE FROM departure_seat WHERE id = ?').run(hold.id);
-        } else if (kept.length !== JSON.parse(hold.seats || '[]').length) {
-          sqlite
-            .prepare('UPDATE departure_seat SET seats = ?, seat_count = ? WHERE id = ?')
-            .run(JSON.stringify(kept), kept.length, hold.id);
+        const seats = JSON.parse(row.seats || '[]');
+        const holds = sqlite
+          .prepare('SELECT * FROM departure_seat WHERE trip_key = ? AND travel_date = ?')
+          .all(row.trip_key, row.travel_date);
+        const drop = new Set(seats.map(String));
+        for (const hold of holds) {
+          const kept = (JSON.parse(hold.seats || '[]')).filter((seat) => !drop.has(String(seat)));
+          if (kept.length === 0) {
+            sqlite.prepare('DELETE FROM departure_seat WHERE id = ?').run(hold.id);
+          } else if (kept.length !== JSON.parse(hold.seats || '[]').length) {
+            sqlite
+              .prepare('UPDATE departure_seat SET seats = ?, seat_count = ? WHERE id = ?')
+              .run(JSON.stringify(kept), kept.length, hold.id);
+          }
         }
       }
     });
     cancelTx();
 
     let refundStatus = 'not_refunded';
-    if (booking.payment_tx_id && process.env.FLW_SECRET_KEY) {
+    if (refundInFlight) {
+      refundStatus = refundInFlight.refund_status;
+      for (const row of cancelTargets) {
+        if (row.refund_status !== refundStatus) {
+          sqlite.prepare('UPDATE booking SET refund_status = ? WHERE id = ?').run(refundStatus, row.id);
+        }
+      }
+    } else if (booking.payment_tx_id && process.env.FLW_SECRET_KEY) {
       refundStatus = await attemptRefund(booking);
     }
 
-    writeAuditLog({
-      actorId: caller.id,
-      action: 'booking.cancel',
-      entity: 'booking',
-      entityId: booking.id,
-      before: { status: booking.status, refund_status: booking.refund_status || null },
-      after: { status: 'cancelled', refund_status: refundStatus },
+    for (const row of cancelTargets) {
+      writeAuditLog({
+        actorId: caller.id,
+        action: 'booking.cancel',
+        entity: 'booking',
+        entityId: row.id,
+        before: { status: row.status, refund_status: row.refund_status || null },
+        after: { status: 'cancelled', refund_status: refundStatus },
+      });
+      void sendCancellation({ ...row, refund_status: refundStatus });
+    }
+
+    res.json({
+      booking_ref: booking.booking_ref,
+      status: 'cancelled',
+      refund_status: refundStatus,
+      booking_refs: cancelTargets.map((row) => row.booking_ref),
     });
-
-    void sendCancellation({ ...booking, refund_status: refundStatus });
-
-    res.json({ booking_ref: booking.booking_ref, status: 'cancelled', refund_status: refundStatus });
   });
 
   router.post('/webhook', async (req, res) => {
@@ -524,9 +559,15 @@ export function createPaymentsRouter() {
     if (event.startsWith('refund.')) {
       const booking = findBookingForTx([data.charge_id, data.transaction_id, data.tx_ref, data.flwref]);
       if (booking && String(data.status || '').toLowerCase() === 'successful') {
-        sqlite
-          .prepare("UPDATE booking SET refund_status = 'refunded', refund_next_attempt_at = NULL WHERE id = ? AND refund_status != 'refunded'")
-          .run(booking.id);
+        if (booking.payment_tx_id) {
+          sqlite
+            .prepare("UPDATE booking SET refund_status = 'refunded', refund_next_attempt_at = NULL WHERE payment_tx_id = ? AND refund_status != 'refunded'")
+            .run(booking.payment_tx_id);
+        } else {
+          sqlite
+            .prepare("UPDATE booking SET refund_status = 'refunded', refund_next_attempt_at = NULL WHERE id = ? AND refund_status != 'refunded'")
+            .run(booking.id);
+        }
         writeAuditLog({
           actorId: null,
           action: 'refund.webhook_confirmed',

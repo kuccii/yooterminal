@@ -34,6 +34,7 @@ export default function TripDetail() {
   const [hold, setHold] = useState(null);
   const [holdBusy, setHoldBusy] = useState(false);
   const [holdNote, setHoldNote] = useState('');
+  const [outboundMissing, setOutboundMissing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const holdSeq = useRef(0);
   const holdRef = useRef(null);
@@ -206,6 +207,7 @@ export default function TripDetail() {
       return;
     }
     setError('');
+    setOutboundMissing(false);
     if (!holdActive) {
       setHoldBusy(true);
       try {
@@ -264,6 +266,7 @@ export default function TripDetail() {
         outbound = null;
       }
       if (!outbound?.trip_key) {
+        setOutboundMissing(true);
         setError('Your outbound selection is missing — pick the outbound trip first, then the return.');
         return;
       }
@@ -511,6 +514,11 @@ export default function TripDetail() {
                 <Alert variant="destructive" className="mt-3 rounded-xl">
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
+              )}
+              {outboundMissing && (
+                <Button asChild variant="outline" size="sm" className="mt-3 rounded-lg">
+                  <Link to="/">Start a new search</Link>
+                </Button>
               )}
             </Card>
           </div>

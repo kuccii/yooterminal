@@ -140,6 +140,12 @@ export default function SearchResults() {
   const clearFilters = () => setFilters(EMPTY_FILTERS);
   const currency = trips[0]?.schedule.currency || facets.price?.currency || 'UGX';
 
+  const skipReturn = () => {
+    if (!returnDraft?.trip_key) return;
+    sessionStorage.removeItem('yoo_return_draft');
+    navigate('/checkout', { state: { draft: returnDraft } });
+  };
+
   useEffect(() => {
     if (!returning) {
       setReturnDraft(null);
@@ -281,7 +287,7 @@ export default function SearchResults() {
                   {formatDateFull(returnDraft.travel_date)} · seats {returnDraft.seats.join(', ')}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Choose your return trip below — both legs are paid together.{' '}
+                  Both legs are paid together.{' '}
                   <Link
                     to={`/trip/${encodeURIComponent(returnDraft.trip_key)}?passengers=${passengers}${
                       returnDate ? `&return_date=${returnDate}` : ''
@@ -290,6 +296,14 @@ export default function SearchResults() {
                   >
                     Change outbound
                   </Link>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={skipReturn}
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    Book outbound only
+                  </button>
                 </p>
               </>
             ) : (
@@ -406,6 +420,7 @@ export default function SearchResults() {
                     passengers={passengers}
                     operator={operatorMap[trip.schedule.operator_slug]}
                     seatsAvailable={seatsLeft(trip, held)}
+                    selectable={!returning || Boolean(returnDraft)}
                   />
                 ))}
             </div>
@@ -421,7 +436,8 @@ export default function SearchResults() {
                     on {formatDateFull(returnDate)}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Pick your way back — outbound and return are booked and paid together.
+                    Preview of the way back — pick your outbound trip first, then you&apos;ll choose the return on the
+                    next step. Outbound and return are booked and paid together.
                   </p>
                 </div>
 
@@ -456,6 +472,7 @@ export default function SearchResults() {
                         passengers={passengers}
                         operator={operatorMap[trip.schedule.operator_slug]}
                         seatsAvailable={seatsLeft(trip, returnData.held)}
+                        selectable={false}
                       />
                     ))}
                   </div>

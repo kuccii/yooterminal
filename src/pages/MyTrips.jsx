@@ -11,6 +11,27 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/AuthContext';
 import { formatMoney, todayISO } from '@/lib/format';
 
+const groupKey = (members) => members[0].group_ref || members[0].id;
+
+const groupBookings = (rows) => {
+  const seen = new Set();
+  const groups = [];
+  for (const row of rows) {
+    if (row.group_ref) {
+      if (seen.has(row.group_ref)) continue;
+      seen.add(row.group_ref);
+      groups.push(
+        rows
+          .filter((item) => item.group_ref === row.group_ref)
+          .sort((a, b) => Number(a.leg_index ?? 0) - Number(b.leg_index ?? 0)),
+      );
+    } else {
+      groups.push([row]);
+    }
+  }
+  return groups;
+};
+
 export default function MyTrips() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
@@ -35,29 +56,34 @@ export default function MyTrips() {
     };
   }, [user?.id, cancelling]);
 
-  const cancelBooking = async (booking) => {
+  const cancelBooking = async (members) => {
+    const isGroup = members.length > 1;
+    const label = members.map((member) => member.booking_ref).join(' / ');
     const ok = window.confirm(
-      `Cancel ticket ${booking.booking_ref} (${(booking.seats || []).join(', ')})? Seats are released and any eligible refund is requested automatically.`,
+      isGroup
+        ? `Cancel round trip ${label}? Both legs are released together and one full refund is requested automatically.`
+        : `Cancel ticket ${members[0].booking_ref} (${(members[0].seats || []).join(', ')})? Seats are released and any eligible refund is requested automatically.`,
     );
     if (!ok) return;
-    setCancelling(booking.id);
+    setCancelling(groupKey(members));
     setCancelNote('');
     try {
+      const target = members.find((member) => member.status === 'paid') || members[0];
       const res = await fetch('/api/payments/cancel', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ booking_ref: booking.booking_ref }),
+        body: JSON.stringify({ booking_ref: target.booking_ref }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setCancelNote(body.error || 'We could not cancel this ticket.');
       } else if (body.refund_status === 'refunded') {
-        setCancelNote(`${booking.booking_ref} cancelled — your refund has been requested with the payment provider.`);
+        setCancelNote(`${label} cancelled — your refund has been requested with the payment provider.`);
       } else if (body.refund_status === 'refund_pending') {
-        setCancelNote(`${booking.booking_ref} cancelled — the refund is pending; our team will confirm it shortly.`);
+        setCancelNote(`${label} cancelled — the refund is pending; our team will confirm it shortly.`);
       } else {
-        setCancelNote(`${booking.booking_ref} cancelled.`);
+        setCancelNote(`${label} cancelled.`);
       }
     } catch {
       setCancelNote('We could not cancel this ticket. Please try again.');
@@ -66,8 +92,10 @@ export default function MyTrips() {
   };
 
   const today = todayISO();
-  const upcoming = bookings.filter((booking) => booking.travel_date >= today && booking.status !== 'cancelled');
-  const past = bookings.filter((booking) => booking.travel_date < today || booking.status === 'cancelled');
+  const groups = groupBookings(bookings);
+  const isActiveGroup = (members) => members.some((item) => item.travel_date >= today && item.status !== 'cancelled');
+  const upcoming = groups.filter(isActiveGroup);
+  const past = groups.filter((members) => !isActiveGroup(members));
 
   const renderList = (list, emptyText) => {
     if (!list.length) {
@@ -75,61 +103,96 @@ export default function MyTrips() {
     }
     return (
       <div className="space-y-4">
-        {list.map((booking) => (
-          <div key={booking.id} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-display text-lg font-bold">
-                  {booking.origin_city} → {booking.destination_city}
-                </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <CalendarDays className="h-3.5 w-3.5" /> {booking.travel_date} at {booking.departure_time}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-3.5 w-3.5" /> {booking.operator_name}
-                  </span>
-                </p>
+        {list.map((members) => {
+          const key = groupKey(members);
+          const isGroup = members.length > 1;
+          const total = members.reduce((sum, member) => sum + Number(member.amount || 0), 0);
+          const primary = members[0];
+          const allCancelled = members.every((member) => member.status === 'cancelled');
+          const seatLabel = members.map((member) => (member.seats || []).join(', ')).join(' · ');
+          return (
+            <div key={key} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-display text-lg font-bold">
+                    {isGroup
+                      ? `${primary.origin_city} → ${primary.destination_city} round trip`
+                      : `${primary.origin_city} → ${primary.destination_city}`}
+                  </p>
+                  <div className="mt-0.5 space-y-0.5">
+                    {members.map((leg) => (
+                      <p
+                        key={leg.id}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+                      >
+                        <span className="flex items-center gap-1">
+                          <CalendarDays className="h-3.5 w-3.5" /> {leg.travel_date} at {leg.departure_time}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5" /> {leg.operator_name}
+                        </span>
+                        {isGroup && (
+                          <span>
+                            {leg.origin_city} → {leg.destination_city}
+                          </span>
+                        )}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-display text-lg font-extrabold">{formatMoney(total, primary.currency)}</p>
+                  <p className="text-xs text-muted-foreground">{allCancelled ? 'Cancelled' : `Seats ${seatLabel}`}</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-display text-lg font-extrabold">{formatMoney(booking.amount, booking.currency)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {booking.status === 'cancelled' ? 'Cancelled' : `Seats ${(booking.seats || []).join(', ')}`}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-lg"
-                onClick={() => setExpanded(expanded === booking.id ? null : booking.id)}
-              >
-                {expanded === booking.id ? 'Hide ticket' : 'View ticket'}
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="rounded-lg">
-                <Link to={`/routes/${booking.route_slug}`}>Route info</Link>
-              </Button>
-              {booking.status !== 'cancelled' && (
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-lg text-destructive hover:bg-destructive/10"
-                  disabled={cancelling === booking.id}
-                  onClick={() => cancelBooking(booking)}
+                  className="rounded-lg"
+                  onClick={() => setExpanded(expanded === key ? null : key)}
                 >
-                  {cancelling === booking.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                  Cancel ticket
+                  {expanded === key ? 'Hide ticket' : 'View ticket'}
                 </Button>
+                <Button asChild variant="ghost" size="sm" className="rounded-lg">
+                  <Link to={`/routes/${primary.route_slug}`}>Route info</Link>
+                </Button>
+                {!allCancelled && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg text-destructive hover:bg-destructive/10"
+                    disabled={cancelling === key}
+                    onClick={() => cancelBooking(members)}
+                  >
+                    {cancelling === key && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                    {isGroup ? 'Cancel trip' : 'Cancel ticket'}
+                  </Button>
+                )}
+              </div>
+              {expanded === key && (
+                <div className="mt-4 space-y-4">
+                  {members.map((leg, index) => (
+                    <ETicket
+                      key={leg.booking_ref}
+                      booking={leg}
+                      label={isGroup ? (index === 0 ? 'Outbound' : 'Return') : null}
+                      amountLabel={isGroup ? 'Fare' : 'Amount paid'}
+                    />
+                  ))}
+                  {isGroup && (
+                    <div className="flex items-end justify-between rounded-2xl border border-border px-5 py-4">
+                      <span className="text-sm font-medium text-muted-foreground">Total paid · both legs</span>
+                      <span className="font-display text-xl font-extrabold">
+                        {formatMoney(total, primary.currency)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-            {expanded === booking.id && (
-              <div className="mt-4">
-                <ETicket booking={booking} />
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };

@@ -9,11 +9,12 @@ import ETicket from '@/components/ETicket';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { readTicket } from '@/lib/bookingRef';
+import { formatMoney } from '@/lib/format';
 
 export default function BookingConfirmation() {
   const { ref = '' } = useParams();
   const bookingRef = String(ref).toUpperCase();
-  const [state, setState] = useState({ loading: true, booking: null, operator: null });
+  const [state, setState] = useState({ loading: true, booking: null, legs: [], operators: {} });
   const celebrated = useRef(false);
 
   useEffect(() => {
@@ -32,16 +33,29 @@ export default function BookingConfirmation() {
       }
       if (!active) return;
 
-      let operator = null;
-      if (booking?.operator_slug) {
-        const operatorPage = await db.entities.Operator
-          .filter({ slug: booking.operator_slug }, { limit: 1 })
+      let legs = [];
+      if (Array.isArray(booking?.bookings) && booking.bookings.length) {
+        legs = booking.bookings;
+      } else if (booking?.group_ref) {
+        const page = await db.entities.Booking
+          .filter({ group_ref: booking.group_ref }, { limit: 6 })
           .catch(() => ({ items: [] }));
-        operator = operatorPage.items?.[0] || null;
+        legs = page.items || [];
       }
+      if (booking && !legs.length) legs = [booking];
+      legs = [...legs].sort((a, b) => Number(a.leg_index ?? 0) - Number(b.leg_index ?? 0));
+
+      const operatorSlugs = [...new Set(legs.map((leg) => leg?.operator_slug).filter(Boolean))];
+      const operatorPage = operatorSlugs.length
+        ? await db.entities.Operator
+            .filter({ slug: { $in: operatorSlugs } }, { limit: 20 })
+            .catch(() => ({ items: [] }))
+        : { items: [] };
       if (!active) return;
 
-      setState({ loading: false, booking, operator });
+      const operators = Object.fromEntries((operatorPage.items || []).map((item) => [item.slug, item]));
+
+      setState({ loading: false, booking, legs, operators });
 
       if (booking && booking.status !== 'cancelled' && !celebrated.current) {
         celebrated.current = true;
@@ -85,7 +99,10 @@ export default function BookingConfirmation() {
     );
   }
 
-  const { booking, operator } = state;
+  const { booking, legs, operators } = state;
+  const isRoundTrip = legs.length > 1;
+  const totalPaid = legs.reduce((sum, leg) => sum + Number(leg.amount || 0), 0);
+  const refLabel = legs.map((leg) => leg.booking_ref).join(' · ');
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
@@ -95,18 +112,40 @@ export default function BookingConfirmation() {
           {booking.status === 'cancelled' ? 'Booking cancelled' : 'You&apos;re on board!'}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Reference <span className="font-semibold text-foreground">{booking.booking_ref}</span> · a copy of your ticket
+          Reference <span className="font-semibold text-foreground">{refLabel}</span> · a copy of your ticket
           is saved on this device and under My trips.
         </p>
-        <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <p className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground">
           <CalendarDays className="h-3.5 w-3.5" />
-          {booking.origin_city} → {booking.destination_city} on {booking.travel_date} at {booking.departure_time}
+          {legs.map((leg, index) => (
+            <React.Fragment key={leg.booking_ref}>
+              {index > 0 && <span aria-hidden="true">·</span>}
+              <span>
+                {leg.origin_city} → {leg.destination_city} on {leg.travel_date} at {leg.departure_time}
+              </span>
+            </React.Fragment>
+          ))}
         </p>
       </div>
 
-      <div className="mt-8">
-        <ETicket booking={booking} operator={operator} />
+      <div className="mt-8 space-y-6">
+        {legs.map((leg, index) => (
+          <ETicket
+            key={leg.booking_ref}
+            booking={leg}
+            operator={operators[leg.operator_slug] || null}
+            label={isRoundTrip ? (index === 0 ? 'Outbound' : 'Return') : null}
+            amountLabel={isRoundTrip ? 'Fare' : 'Amount paid'}
+          />
+        ))}
       </div>
+
+      {isRoundTrip && (
+        <div className="mt-6 flex items-end justify-between rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+          <span className="text-sm font-medium text-muted-foreground">Total paid · both legs</span>
+          <span className="font-display text-2xl font-extrabold">{formatMoney(totalPaid, legs[0].currency)}</span>
+        </div>
+      )}
 
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <Button asChild>

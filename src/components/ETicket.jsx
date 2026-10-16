@@ -15,7 +15,7 @@ function Field({ label, value, sub }) {
   );
 }
 
-export default function ETicket({ booking, operator }) {
+export default function ETicket({ booking, operator, label = null, amountLabel = 'Amount paid' }) {
   const departure = parseISO(`${booking.travel_date}T${booking.departure_time}:00`);
   const arrival = addMinutes(departure, booking.duration_minutes || 0);
   const nextDay = format(arrival, 'yyyy-MM-dd') !== booking.travel_date;
@@ -26,6 +26,7 @@ export default function ETicket({ booking, operator }) {
       <div className={`flex flex-wrap items-center justify-between gap-3 px-6 py-4 ${cancelled ? 'bg-destructive' : 'bg-primary'}`}>
         <span className="flex items-center gap-2 font-display text-lg font-extrabold text-white">
           <BusFront className="h-5 w-5" />
+          {label && <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">{label}</span>}
           {booking.origin_city} → {booking.destination_city}
         </span>
         <Badge className="rounded-full bg-white/20 text-white hover:bg-white/20">
@@ -98,7 +99,7 @@ export default function ETicket({ booking, operator }) {
 
         <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-border pt-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Amount paid</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{amountLabel}</p>
             <p className="font-display text-xl font-extrabold">{formatMoney(booking.amount, booking.currency)}</p>
           </div>
           <div className="text-right text-xs text-muted-foreground">

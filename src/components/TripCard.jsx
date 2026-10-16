@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import OperatorAvatar from '@/components/OperatorAvatar';
 import { formatDuration, formatMoney } from '@/lib/format';
 
-export default function TripCard({ trip, operator, seatsAvailable, passengers = 1 }) {
+export default function TripCard({ trip, operator, seatsAvailable, passengers = 1, selectable = true }) {
   const schedule = trip.schedule;
   const [params] = useSearchParams();
   const detailParams = new URLSearchParams({ passengers: String(passengers) });
@@ -49,9 +49,15 @@ export default function TripCard({ trip, operator, seatsAvailable, passengers = 
           </p>
         </div>
 
-        <Button asChild className="rounded-xl">
-          <Link to={`/trip/${encodeURIComponent(trip.key)}?${detailParams.toString()}`}>Select seats</Link>
-        </Button>
+        {selectable ? (
+          <Button asChild className="rounded-xl">
+            <Link to={`/trip/${encodeURIComponent(trip.key)}?${detailParams.toString()}`}>Select seats</Link>
+          </Button>
+        ) : (
+          <span className="rounded-xl border border-dashed border-border px-3.5 py-2 text-xs font-semibold text-muted-foreground">
+            Pick your outbound trip first
+          </span>
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-2 text-xs">
