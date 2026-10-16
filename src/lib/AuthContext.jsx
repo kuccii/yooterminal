@@ -1,20 +1,29 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth as useClerkAuth, useUser, useClerk } from '@clerk/react';
-import db from '@/api/client';
+import db, { setAuthTokenProvider } from '@/api/client';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
+  const { isLoaded: clerkLoaded, isSignedIn, getToken } = useClerkAuth();
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState(null);
+
+  useEffect(() => {
+    if (isSignedIn && getToken) {
+      setAuthTokenProvider(() => getToken());
+    } else {
+      setAuthTokenProvider(null);
+    }
+    return () => setAuthTokenProvider(null);
+  }, [isSignedIn, getToken]);
 
   const checkUserAuth = useCallback(async () => {
     if (!clerkLoaded) return;

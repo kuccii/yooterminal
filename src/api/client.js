@@ -1,13 +1,24 @@
 const API_BASE = '/api';
 
+let authTokenProvider = null;
+
+export function setAuthTokenProvider(provider) {
+  authTokenProvider = provider;
+}
+
 async function request(path, options = {}) {
+  const headers = {
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.headers || {}),
+  };
+  if (authTokenProvider) {
+    const token = await authTokenProvider().catch(() => null);
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     ...options,
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {}),
-    },
+    headers,
   });
 
   let data = null;

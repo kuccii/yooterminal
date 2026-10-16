@@ -1,12 +1,6 @@
 import { createClerkClient } from '@clerk/express';
 import { sqlite } from './db.js';
 
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
-const EXTRA_ORIGINS = (process.env.TRUSTED_ORIGINS || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
 if (!process.env.CLERK_SECRET_KEY) {
   console.error(
     '[server] CLERK_SECRET_KEY is not set. Set it in the process environment (pm2 env / shell) and restart. Refusing to start.',
@@ -18,8 +12,6 @@ const clerkClient = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY,
   publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
 });
-
-const authorizedParties = [CLIENT_ORIGIN, ...EXTRA_ORIGINS].filter(Boolean);
 
 function extractBearer(req) {
   const header = req.headers.authorization || '';
@@ -64,17 +56,15 @@ export async function getCaller(req) {
       method: req.method,
       headers: { cookie: req.headers.cookie || '', authorization: `Bearer ${token}` },
     });
-    const { isAuthenticated, toAuth } = await clerkClient.authenticateRequest(request, {
-      authorizedParties: authorizedParties.length ? authorizedParties : undefined,
-    });
+    const { isAuthenticated, toAuth } = await clerkClient.authenticateRequest(request);
     if (!isAuthenticated) return null;
     const authObject = toAuth();
     const userId = authObject.userId;
     if (!userId) return null;
-    const claims = /** @type {Record<string, string>} */ (authObject.sessionClaims || {});
-    const email = claims.email || claims.primary_email || '';
+    const user = await clerkClient.users.getUser(userId);
+    const email = String(user.primaryEmailAddress?.emailAddress || '').toLowerCase();
     if (!email) return null;
-    const fullName = [claims.first_name, claims.last_name].filter(Boolean).join(' ') || claims.name || '';
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
     return upsertAppUser({ clerkId: userId, email, fullName });
   } catch {
     return null;
