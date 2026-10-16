@@ -9,7 +9,9 @@ import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
 import { createAdminRouter } from './admin.js';
 import { createSeatsRouter } from './seats.js';
-import { createProfileRouter, UPLOADS_DIR } from './profile.js';
+import { createProfileRouter } from './profile.js';
+import { createSiteContentRouter } from './siteContent.js';
+import { UPLOADS_DIR } from './uploads.js';
 import { sweepExpiredHolds } from './booking.js';
 import { runRefundQueue } from './payments.js';
 import { sendDepartureReminder } from './notifications.js';
@@ -24,6 +26,7 @@ app.disable('x-powered-by');
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
 app.use('/api/profile/logo', express.json({ limit: '4mb' }));
+app.use('/api/admin/uploads', express.json({ limit: '4mb' }));
 app.use(express.json());
 
 app.get('/api/config', (req, res) => {
@@ -60,6 +63,7 @@ app.use('/api/coupons', createCouponsRouter());
 app.use('/api/admin', createAdminRouter());
 app.use('/api/seats', createSeatsRouter());
 app.use('/api/profile', createProfileRouter());
+app.use('/api/site-content', createSiteContentRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {

@@ -1,29 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import BrandMark from '@/components/BrandMark';
-
-const POPULAR_ROUTES = [
-  ['Kampala to Kigali', '/routes/kampala-kigali'],
-  ['Kigali to Kampala', '/routes/kigali-kampala'],
-  ['Kampala to Mbarara', '/routes/kampala-mbarara'],
-  ['Kampala to Gulu', '/routes/kampala-gulu'],
-  ['Kigali to Musanze', '/routes/kigali-musanze'],
-  ['Kigali to Rubavu', '/routes/kigali-rubavu'],
-];
-
-const UG_CITIES = [
-  ['Kampala', '/city/kampala'],
-  ['Entebbe', '/city/entebbe'],
-  ['Jinja', '/city/jinja'],
-  ['Mbarara', '/city/mbarara'],
-];
-
-const RW_CITIES = [
-  ['Kigali', '/city/kigali'],
-  ['Musanze', '/city/musanze'],
-  ['Rubavu', '/city/rubavu'],
-  ['Huye', '/city/huye'],
-];
+import { useSiteContent } from '@/lib/SiteContentContext';
 
 function Column({ title, links }) {
   return (
@@ -43,19 +21,19 @@ function Column({ title, links }) {
 }
 
 export default function Footer() {
+  const { content } = useSiteContent();
+
   return (
     <footer className="mt-16 border-t border-border bg-secondary/60">
       <div className="mx-auto max-w-6xl px-4 py-12">
         <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
           <div>
             <BrandMark />
-            <p className="mt-4 max-w-xs text-sm text-muted-foreground">
-              Compare and book bus tickets across Uganda and Rwanda. Instant e-tickets, secure payment and 24/7 support.
-            </p>
+            <p className="mt-4 max-w-xs text-sm text-muted-foreground">{content.footer_tagline}</p>
           </div>
-          <Column title="Popular routes" links={POPULAR_ROUTES} />
-          <Column title="Buses in Uganda" links={UG_CITIES} />
-          <Column title="Buses in Rwanda" links={RW_CITIES} />
+          <Column title="Popular routes" links={content.footer_routes} />
+          <Column title="Buses in Uganda" links={content.footer_ug_cities} />
+          <Column title="Buses in Rwanda" links={content.footer_rw_cities} />
         </div>
         <div className="mt-10 flex flex-col gap-2 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} YooTerminal. Bus travel made easy.</p>

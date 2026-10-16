@@ -1,11 +1,29 @@
 import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import { sqlite } from './db.js';
 import { getCaller } from './auth.js';
 import { HttpError } from './entities.js';
 import { writeAuditLog } from './audit.js';
 import { attemptRefund } from './payments.js';
+import { UPLOADS_DIR, removeStoredImage, uploadImage } from './uploads.js';
 
 const ROLES = ['user', 'operator', 'admin'];
+
+const UPLOAD_NAME_PATTERN = /^[0-9a-fA-F-]{16,}\.(jpg|png|webp|svg)$/;
+
+const IMAGE_REFERENCE_CHECKS = [
+  'SELECT 1 FROM site_content WHERE value LIKE ? LIMIT 1',
+  'SELECT 1 FROM banner WHERE image_url LIKE ? LIMIT 1',
+  'SELECT 1 FROM route WHERE image_url LIKE ? LIMIT 1',
+  'SELECT 1 FROM city WHERE image_url LIKE ? LIMIT 1',
+  'SELECT 1 FROM app_user WHERE logo_path LIKE ? LIMIT 1',
+];
+
+function isImageReferenced(filename) {
+  const pattern = `%${filename}%`;
+  return IMAGE_REFERENCE_CHECKS.some((sql) => Boolean(sqlite.prepare(sql).get(pattern)));
+}
 
 function createdAtISO(value) {
   const numeric = Number(value);
@@ -140,6 +158,62 @@ export function createAdminRouter() {
     });
 
     res.json({ id: booking.id, booking_ref: booking.booking_ref, refund_status: refundStatus });
+  });
+
+  router.get('/uploads', async (req, res) => {
+    await requireAdmin(req);
+
+    let names = [];
+    if (fs.existsSync(UPLOADS_DIR)) {
+      names = fs.readdirSync(UPLOADS_DIR).filter((name) => UPLOAD_NAME_PATTERN.test(name));
+    }
+
+    const items = names
+      .map((name) => {
+        const stat = fs.statSync(path.join(UPLOADS_DIR, name));
+        return { filename: name, url: `/uploads/${name}`, size: stat.size, modified_at: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => (a.modified_at < b.modified_at ? 1 : -1));
+
+    res.json({ items });
+  });
+
+  router.post('/uploads', async (req, res) => {
+    const caller = await requireAdmin(req);
+
+    const url = uploadImage(req.body);
+    writeAuditLog({
+      actorId: caller.id,
+      action: 'upload.create',
+      entity: 'upload',
+      entityId: url,
+      before: null,
+      after: { url },
+    });
+
+    res.json({ url });
+  });
+
+  router.delete('/uploads/:filename', async (req, res) => {
+    const caller = await requireAdmin(req);
+
+    const filename = path.basename(String(req.params.filename || ''));
+    if (!UPLOAD_NAME_PATTERN.test(filename)) throw new HttpError(400, 'Invalid image name.');
+    const target = path.join(UPLOADS_DIR, filename);
+    if (!fs.existsSync(target)) throw new HttpError(404, 'Image not found');
+    if (isImageReferenced(filename)) throw new HttpError(409, 'This image is still used on the site.');
+
+    removeStoredImage(filename);
+    writeAuditLog({
+      actorId: caller.id,
+      action: 'upload.delete',
+      entity: 'upload',
+      entityId: `/uploads/${filename}`,
+      before: { url: `/uploads/${filename}` },
+      after: null,
+    });
+
+    res.json({ success: true });
   });
 
   return router;

@@ -6,8 +6,10 @@ import { ArrowRight, MapPin } from 'lucide-react';
 
 import OperatorAvatar from '@/components/OperatorAvatar';
 import Stars from '@/components/Stars';
+import { useSiteContent } from '@/lib/SiteContentContext';
 
 export default function OperatorsSection() {
+  const { content } = useSiteContent();
   const [operators, setOperators] = useState([]);
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function OperatorsSection() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-14">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="font-display text-2xl font-extrabold tracking-tight">Bus companies on the network</h2>
+        <h2 className="font-display text-2xl font-extrabold tracking-tight">{content.operators_heading}</h2>
         <Link to="/operator" className="text-sm font-semibold text-primary hover:underline">
           Operator dashboard
         </Link>

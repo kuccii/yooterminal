@@ -7,8 +7,10 @@ import { ArrowRight } from 'lucide-react';
 import { Image } from '@/components/ui/image';
 import { formatMoney, formatDuration } from '@/lib/format';
 import { IMAGES } from '@/lib/images';
+import { useSiteContent } from '@/lib/SiteContentContext';
 
 export default function TopRoutes() {
+  const { content } = useSiteContent();
   const [routes, setRoutes] = useState([]);
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function TopRoutes() {
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-14">
-      <h2 className="font-display text-2xl font-extrabold tracking-tight">Top travelled bus routes</h2>
+      <h2 className="font-display text-2xl font-extrabold tracking-tight">{content.routes_heading}</h2>
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {routes.map((route) => (
           <Link

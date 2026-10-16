@@ -132,6 +132,42 @@ const COUPONS = [
   { code: 'WELCOME10', description: '10% off your first booking', discount_type: 'percent', discount_value: 10, min_amount: 10000, active: 1 },
 ];
 
+const SITE_CONTENT = [
+  { key: 'hero_headline', value: json('Cross-border coach tickets, booked in minutes') },
+  { key: 'hero_sub', value: json("Kampala to Kigali day and night coaches, plus Uganda's long-distance routes \u2014 Gulu, Mbale, Fort Portal, Mbarara and Kabale. Compare real terminal departures, pick your seat and pay with mobile money.") },
+  { key: 'hero_badge_payment', value: json('Secure payment with Flutterwave') },
+  { key: 'hero_badge_ticket', value: json('Instant e-tickets') },
+  { key: 'hero_image', value: json('/images/hero.svg') },
+  { key: 'faq_heading', value: json('Frequently asked questions') },
+  { key: 'trust_heading', value: json('People from around the world trust YooTerminal') },
+  { key: 'trust_rating_fallback', value: json('Rated by travellers on every route') },
+  { key: 'trust_note', value: json('Reviews from passengers who travelled with our partner operators') },
+  { key: 'operators_heading', value: json('Bus companies on the network') },
+  { key: 'routes_heading', value: json('Top travelled bus routes') },
+  { key: 'countries_heading', value: json('Popular places in Uganda & Rwanda') },
+  { key: 'footer_tagline', value: json('Compare and book bus tickets across Uganda and Rwanda. Instant e-tickets, secure payment and 24/7 support.') },
+  { key: 'countries', value: json([{ name: 'Uganda', image: '/images/kampala.svg' }, { name: 'Rwanda', image: '/images/kigali.svg' }]) },
+  { key: 'footer_routes', value: json([['Kampala to Kigali', '/routes/kampala-kigali'], ['Kigali to Kampala', '/routes/kigali-kampala'], ['Kampala to Mbarara', '/routes/kampala-mbarara'], ['Kampala to Gulu', '/routes/kampala-gulu'], ['Kigali to Musanze', '/routes/kigali-musanze'], ['Kigali to Rubavu', '/routes/kigali-rubavu']]) },
+  { key: 'footer_ug_cities', value: json([['Kampala', '/city/kampala'], ['Entebbe', '/city/entebbe'], ['Jinja', '/city/jinja'], ['Mbarara', '/city/mbarara']]) },
+  { key: 'footer_rw_cities', value: json([['Kigali', '/city/kigali'], ['Musanze', '/city/musanze'], ['Rubavu', '/city/rubavu'], ['Huye', '/city/huye']]) },
+];
+
+const SITE_FAQS = [
+  { question: 'How do I book a bus ticket on YooTerminal?', answer: 'Search your route, compare departures and fares from every operator on that route, pick your seats, and pay securely by card or mobile money. Your e-ticket arrives instantly — no printing needed.', sort_order: 1 },
+  { question: 'Which bus operators can I book?', answer: 'We compare coaches from operators across Uganda and Rwanda, including Link Bus Services, YY Coaches, Jaguar Executive Coaches, Trinity Express, Volcano Express, Ritco and more.', sort_order: 2 },
+  { question: 'How can I pay for my ticket?', answer: 'Payments are handled by Flutterwave. You can pay with a debit or credit card, or with MTN and Airtel Mobile Money in Uganda and Rwanda.', sort_order: 3 },
+  { question: 'Do I need a passport for the Kampala to Kigali route?', answer: 'Yes. The Kampala–Kigali coach crosses the Gatuna/Katuna border, so bring a valid passport or East African Community ID and expect a border stop of around 45 minutes.', sort_order: 4 },
+  { question: 'How early should I arrive at the bus park?', answer: 'Arrive at least 30 minutes before departure so the conductor can check your ticket and load your luggage. Most operators close boarding 10 minutes before departure.', sort_order: 5 },
+  { question: 'Can I change or cancel my booking?', answer: 'Sign in to My trips to cancel a booking before departure. Operator refund rules apply, and our 24/7 support team can help with changes.', sort_order: 6 },
+];
+
+const SITE_FEATURES = [
+  { title: 'Compare real fares', description: 'Every departure from Uganda and Rwanda coach operators, side by side.', sort_order: 1 },
+  { title: 'Instant e-tickets', description: 'Book your seat and get your ticket in seconds — no printing needed.', sort_order: 2 },
+  { title: 'Secure payment', description: 'Pay by card or mobile money through Flutterwave, safely encrypted.', sort_order: 3 },
+  { title: '24/7 customer service', description: 'Our team is here to help at every step, before and after you travel.', sort_order: 4 },
+];
+
 const dayISO = (offset) => {
   const date = new Date();
   date.setDate(date.getDate() + offset);
@@ -200,7 +236,7 @@ async function seed() {
   ensureUser({ email: 'operator@example.com', name: 'Savannah Ops', role: 'operator' });
   ensureUser({ email: 'kigali.ops@example.com', name: 'Kigali Ops', role: 'operator' });
 
-  for (const table of ['departure_seat', 'booking', 'coupon', 'review', 'banner', 'schedule', 'bus', 'route', 'operator', 'city', 'platform_setting']) {
+  for (const table of ['departure_seat', 'booking', 'coupon', 'review', 'banner', 'schedule', 'bus', 'route', 'operator', 'city', 'platform_setting', 'site_content', 'site_faq', 'site_feature']) {
     clearTable(table);
   }
 
@@ -222,6 +258,9 @@ async function seed() {
   for (const review of REVIEWS) insert('review', { ...review, id: newId(), created_date: now });
   for (const setting of PLATFORM_SETTINGS) insert('platform_setting', { ...setting, id: newId(), created_date: now });
   for (const coupon of COUPONS) insert('coupon', { ...coupon, id: newId(), created_date: now });
+  for (const entry of SITE_CONTENT) insert('site_content', { ...entry, id: newId(), created_date: now });
+  for (const faq of SITE_FAQS) insert('site_faq', { ...faq, active: 1, id: newId(), created_date: now });
+  for (const feature of SITE_FEATURES) insert('site_feature', { ...feature, active: 1, id: newId(), created_date: now });
   for (const booking of BOOKINGS) insert('booking', { ...booking, id: newId(), created_date: now });
 
   console.log(`[seed] Done - ${CITIES.length} cities, ${ROUTES.length} routes, ${SCHEDULES.length} schedules, ${OPERATORS.length} operators.`);

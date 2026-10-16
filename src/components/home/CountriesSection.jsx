@@ -6,10 +6,12 @@ import { MapPin } from 'lucide-react';
 
 import { Image } from '@/components/ui/image';
 import { IMAGES } from '@/lib/images';
+import { useSiteContent } from '@/lib/SiteContentContext';
 
 const COUNTRY_IMAGES = { Uganda: IMAGES.kampala, Rwanda: IMAGES.kigali };
 
 export default function CountriesSection() {
+  const { content } = useSiteContent();
   const [cities, setCities] = useState([]);
 
   useEffect(() => {
@@ -25,25 +27,23 @@ export default function CountriesSection() {
     };
   }, []);
 
-  const countries = ['Uganda', 'Rwanda'];
-
   return (
     <section className="mx-auto max-w-6xl px-4 py-14">
-      <h2 className="font-display text-2xl font-extrabold tracking-tight">Popular places in Uganda &amp; Rwanda</h2>
+      <h2 className="font-display text-2xl font-extrabold tracking-tight">{content.countries_heading}</h2>
       <div className="mt-8 grid gap-5 md:grid-cols-2">
-        {countries.map((country) => {
-          const countryCities = cities.filter((city) => city.country === country);
+        {content.countries.map((country) => {
+          const countryCities = cities.filter((city) => city.country === country.name);
           return (
-            <div key={country} className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+            <div key={country.name} className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
               <div className="relative h-44 w-full overflow-hidden bg-secondary">
                 <Image
-                  src={COUNTRY_IMAGES[country]}
-                  alt={country}
+                  src={country.image || COUNTRY_IMAGES[country.name]}
+                  alt={country.name}
                   className="h-44 w-full object-cover"
                 />
                 <span className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1 text-sm font-bold backdrop-blur">
                   <MapPin className="h-3.5 w-3.5 text-primary" />
-                  {country}
+                  {country.name}
                 </span>
               </div>
               <div className="p-5">
@@ -62,7 +62,7 @@ export default function CountriesSection() {
                   to="/places"
                   className="mt-4 inline-block text-sm font-semibold text-primary transition hover:underline"
                 >
-                  See all cities in {country}
+                  See all cities in {country.name}
                 </Link>
               </div>
             </div>

@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import { ThemeProvider } from 'next-themes';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { SiteContentProvider } from '@/lib/SiteContentContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -93,11 +94,13 @@ function App() {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <Router>
         <AuthProvider>
-          <QueryClientProvider client={queryClientInstance}>
-            <ScrollToTop />
-            <AuthenticatedApp />
-            <Toaster />
-          </QueryClientProvider>
+          <SiteContentProvider>
+            <QueryClientProvider client={queryClientInstance}>
+              <ScrollToTop />
+              <AuthenticatedApp />
+              <Toaster />
+            </QueryClientProvider>
+          </SiteContentProvider>
         </AuthProvider>
       </Router>
     </ThemeProvider>

@@ -94,6 +94,25 @@ export const db = {
       return request('/profile/logo', { method: 'DELETE' });
     },
   },
+  siteContent: {
+    async get() {
+      return request('/site-content');
+    },
+  },
+  uploads: {
+    async list() {
+      return request('/admin/uploads');
+    },
+    async upload({ contentType, dataBase64 }) {
+      return request('/admin/uploads', {
+        method: 'POST',
+        body: JSON.stringify({ content_type: contentType, data_base64: dataBase64 }),
+      });
+    },
+    async remove(filename) {
+      return request(`/admin/uploads/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+    },
+  },
   auth: {
     async isAuthenticated() {
       return (await currentUser()) !== null;
