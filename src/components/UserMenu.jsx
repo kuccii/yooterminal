@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Ticket, LogOut, ChevronDown, LayoutDashboard, ShieldCheck } from 'lucide-react';
+import { Ticket, LogOut, ChevronDown, LayoutDashboard, ShieldCheck, UserCog } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,11 @@ export default function UserMenu() {
         <DropdownMenuItem asChild>
           <Link to="/trips" className="cursor-pointer">
             <Ticket className="mr-2 h-4 w-4" /> My trips
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/account" className="cursor-pointer">
+            <UserCog className="mr-2 h-4 w-4" /> Account settings
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

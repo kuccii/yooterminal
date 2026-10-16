@@ -25,6 +25,7 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+import AccountSettings from '@/pages/AccountSettings';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -70,6 +71,7 @@ const AuthenticatedApp = () => {
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route path="/trips" element={<MyTrips />} />
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/account" element={<AccountSettings />} />
         </Route>
       </Route>
 

@@ -9,6 +9,7 @@ import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
 import { createAdminRouter } from './admin.js';
 import { createSeatsRouter } from './seats.js';
+import { createProfileRouter } from './profile.js';
 import { sweepExpiredHolds } from './booking.js';
 import { runRefundQueue } from './payments.js';
 import { sendDepartureReminder } from './notifications.js';
@@ -51,6 +52,7 @@ app.use('/api/payments', createPaymentsRouter());
 app.use('/api/coupons', createCouponsRouter());
 app.use('/api/admin', createAdminRouter());
 app.use('/api/seats', createSeatsRouter());
+app.use('/api/profile', createProfileRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {

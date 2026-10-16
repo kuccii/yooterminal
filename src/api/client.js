@@ -73,6 +73,17 @@ export const db = {
   entities: /** @type {any} */ (new Proxy({}, {
     get: (target, name) => entityClient(String(name)),
   })),
+  profile: {
+    async get() {
+      return request('/profile');
+    },
+    async update({ fullName }) {
+      return request('/profile', { method: 'PATCH', body: JSON.stringify({ full_name: fullName }) });
+    },
+    async changePassword({ currentPassword, newPassword }) {
+      return request('/profile/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+    },
+  },
   auth: {
     async isAuthenticated() {
       return (await currentUser()) !== null;
