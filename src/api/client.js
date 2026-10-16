@@ -96,7 +96,7 @@ export const db = {
       await request('/auth/sign-out', { method: 'POST' });
     },
     async resetPasswordRequest(email) {
-      await request('/auth/forget-password', {
+      await request('/auth/request-password-reset', {
         method: 'POST',
         body: JSON.stringify({
           email,
