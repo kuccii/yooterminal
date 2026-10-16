@@ -61,6 +61,7 @@ async function currentUser() {
       email: data.email,
       role: data.role || 'user',
       full_name: data.full_name || '',
+      logo_path: data.logo_path || null,
     };
   } catch {
     return null;
@@ -82,6 +83,15 @@ export const db = {
     },
     async changePassword({ currentPassword, newPassword }) {
       return request('/profile/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+    },
+    async uploadLogo({ contentType, dataBase64 }) {
+      return request('/profile/logo', {
+        method: 'POST',
+        body: JSON.stringify({ content_type: contentType, data_base64: dataBase64 }),
+      });
+    },
+    async removeLogo() {
+      return request('/profile/logo', { method: 'DELETE' });
     },
   },
   auth: {

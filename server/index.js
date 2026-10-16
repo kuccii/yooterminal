@@ -9,7 +9,7 @@ import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
 import { createAdminRouter } from './admin.js';
 import { createSeatsRouter } from './seats.js';
-import { createProfileRouter } from './profile.js';
+import { createProfileRouter, UPLOADS_DIR } from './profile.js';
 import { sweepExpiredHolds } from './booking.js';
 import { runRefundQueue } from './payments.js';
 import { sendDepartureReminder } from './notifications.js';
@@ -23,6 +23,7 @@ app.disable('x-powered-by');
 
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
+app.use('/api/profile/logo', express.json({ limit: '4mb' }));
 app.use(express.json());
 
 app.get('/api/config', (req, res) => {
@@ -35,7 +36,13 @@ app.get('/api/config', (req, res) => {
 app.get('/api/me', async (req, res) => {
   const caller = await getCaller(req);
   if (!caller) return res.status(401).json({ error: 'Not signed in' });
-  res.json({ id: caller.id, email: caller.email, role: caller.role, full_name: caller.name });
+  res.json({
+    id: caller.id,
+    email: caller.email,
+    role: caller.role,
+    full_name: caller.name,
+    logo_path: caller.logoPath || null,
+  });
 });
 
 app.get('/api/health', (req, res) => {
@@ -56,6 +63,22 @@ app.use('/api/profile', createProfileRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use(
+  '/uploads',
+  express.static(UPLOADS_DIR, {
+    index: false,
+    dotfiles: 'ignore',
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', "default-src 'none'");
+    },
+  }),
+);
+app.use('/uploads', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 

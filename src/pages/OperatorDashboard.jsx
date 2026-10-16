@@ -138,7 +138,12 @@ export default function OperatorDashboard() {
       <Card className="rounded-3xl border-border p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
-            <OperatorAvatar name={operator.name} color={operator.brand_color} size="lg" />
+            <OperatorAvatar
+              name={operator.name}
+              color={operator.brand_color}
+              size="lg"
+              src={user?.logo_path || ''}
+            />
             <div className="min-w-0">
               <h2 className="font-display text-2xl font-extrabold tracking-tight">{operator.name}</h2>
               <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">

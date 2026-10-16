@@ -20,6 +20,9 @@ dist-ssr
 # Local SQLite database (recreated by `npm run seed`)
 server/data/
 
+# Runtime uploads (operator logos)
+server/uploads/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

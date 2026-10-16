@@ -1,10 +1,10 @@
 import db from '@/api/client';
 
-import React, { useEffect, useState } from 'react';
-import { Loader2, Lock, LogOut, User } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Image as ImageIcon, Loader2, Lock, LogOut, Trash2, Upload, User } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,6 +24,9 @@ const initialsFor = (profile) => {
   return parts.map((part) => part.charAt(0)).join('').toUpperCase() || '?';
 };
 
+const LOGO_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+
 export default function AccountSettingsPanel({ className = '' }) {
   const { user, setUser, logout } = useAuth();
   const [profile, setProfile] = useState(null);
@@ -40,6 +43,10 @@ export default function AccountSettingsPanel({ className = '' }) {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSaved, setPasswordSaved] = useState(false);
+
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState('');
+  const logoInputRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -111,6 +118,55 @@ export default function AccountSettingsPanel({ className = '' }) {
     }
   };
 
+  const applyLogo = (logoPath) => {
+    setProfile((prev) => (prev ? { ...prev, logo_path: logoPath } : prev));
+    setUser((prev) => (prev ? { ...prev, logo_path: logoPath } : prev));
+  };
+
+  const handleLogoPick = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    setLogoError('');
+    if (!LOGO_CONTENT_TYPES.includes(file.type)) {
+      setLogoError('Use a JPEG, PNG, WebP, or SVG image.');
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      setLogoError('Image must be 2 MB or smaller.');
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('We could not read that file. Please try again.'));
+        reader.readAsDataURL(file);
+      });
+      const dataBase64 = String(dataUrl).split(',')[1] || '';
+      const updated = await db.profile.uploadLogo({ contentType: file.type, dataBase64 });
+      applyLogo(updated.logo_path);
+    } catch (err) {
+      setLogoError(err.message || 'We could not upload your logo. Please try again.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    setLogoError('');
+    setLogoUploading(true);
+    try {
+      await db.profile.removeLogo();
+      applyLogo(null);
+    } catch (err) {
+      setLogoError(err.message || 'We could not remove your logo. Please try again.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className={`space-y-6 ${className}`}>
@@ -179,6 +235,68 @@ export default function AccountSettingsPanel({ className = '' }) {
           </Button>
         </form>
       </Card>
+
+      {profile?.role === 'operator' && (
+        <Card className="rounded-3xl border-border p-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            <ImageIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            <h2 className="font-display text-lg font-extrabold tracking-tight">Operator logo</h2>
+          </div>
+          <div className="mt-4 flex items-start gap-4">
+            <Avatar className="h-16 w-16 shrink-0 rounded-xl">
+              {profile.logo_path ? (
+                <AvatarImage src={profile.logo_path} alt="" className="rounded-xl object-cover" />
+              ) : null}
+              <AvatarFallback className="rounded-xl bg-primary text-sm font-bold text-primary-foreground">
+                {initialsFor(profile)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-muted-foreground">
+                Shown on your operator dashboard header. JPEG, PNG, WebP or SVG, up to 2 MB.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={handleLogoPick}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 font-medium"
+                  disabled={logoUploading}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {logoUploading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {profile.logo_path ? 'Replace' : 'Upload'}
+                </Button>
+                {profile.logo_path && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 font-medium text-destructive hover:bg-destructive/10"
+                    disabled={logoUploading}
+                    onClick={handleLogoRemove}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+          {logoError && (
+            <div className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{logoError}</div>
+          )}
+        </Card>
+      )}
 
       <Card className="rounded-3xl border-border p-6 shadow-sm">
         <div className="flex items-center gap-2">

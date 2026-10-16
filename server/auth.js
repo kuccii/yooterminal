@@ -59,7 +59,7 @@ function upsertAppUser({ authId, email, fullName }) {
   const now = new Date().toISOString();
   const normalizedEmail = String(email || '').toLowerCase();
   const existing = sqlite
-    .prepare('SELECT id, role, full_name FROM app_user WHERE email = ?')
+    .prepare('SELECT id, role, full_name, logo_path FROM app_user WHERE email = ?')
     .get(normalizedEmail);
   if (existing) {
     const nextName = fullName || existing.full_name || '';
@@ -73,12 +73,19 @@ function upsertAppUser({ authId, email, fullName }) {
       email: normalizedEmail,
       role: existing.role,
       name: nextName,
+      logoPath: existing.logo_path || null,
     };
   }
   const result = sqlite
     .prepare('INSERT INTO app_user (clerk_id, email, full_name, role, created_date) VALUES (?, ?, ?, ?, ?)')
     .run(authId, normalizedEmail, fullName || '', 'user', now);
-  return { id: String(result.lastInsertRowid), email: normalizedEmail, role: 'user', name: fullName || '' };
+  return {
+    id: String(result.lastInsertRowid),
+    email: normalizedEmail,
+    role: 'user',
+    name: fullName || '',
+    logoPath: null,
+  };
 }
 
 export async function getCaller(req) {
