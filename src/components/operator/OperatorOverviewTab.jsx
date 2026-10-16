@@ -12,7 +12,7 @@ import { formatMoney } from '@/lib/format';
 import { parseTripKey, tripKeyOf } from '@/lib/trips';
 
 const CHIP_STYLES = {
-  soon: 'bg-amber-100 text-amber-700',
+  soon: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
   ontime: 'bg-[hsl(var(--trust))] text-white',
   gone: 'bg-muted text-muted-foreground',
 };

@@ -6,6 +6,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --background: 0 0% 100%;
     --foreground: 217 33% 17%;
     --card: 0 0% 100%;
@@ -48,6 +49,7 @@
   }
 
   .dark {
+    color-scheme: dark;
     --background: 222 47% 6%;
     --foreground: 210 40% 96%;
     --card: 222 40% 9%;
@@ -55,7 +57,7 @@
     --popover: 222 40% 9%;
     --popover-foreground: 210 40% 96%;
     --primary: 211 100% 56%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 222 47% 6%;
     --secondary: 217 33% 14%;
     --secondary-foreground: 210 40% 96%;
     --muted: 217 33% 16%;

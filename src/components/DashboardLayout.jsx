@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, LogOut } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
+import ThemeToggle from '@/components/ThemeToggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Sidebar,
@@ -51,7 +52,7 @@ function DashboardShell({ items, active, onNavigate, title, subtitle, user, chil
       <Sidebar>
         <SidebarHeader className="gap-3 border-b border-sidebar-border px-4 py-4">
           <Link to="/" className="flex w-fit items-center" aria-label="YooTerminal home">
-            <img src="/images/yooterminal-wordmark.png" alt="YooTerminal" className="h-7 w-auto" />
+            <img src="/images/yooterminal-wordmark.png" alt="YooTerminal" className="h-7 w-auto dark:brightness-0 dark:invert" />
           </Link>
           <Link
             to="/"
@@ -127,6 +128,7 @@ function DashboardShell({ items, active, onNavigate, title, subtitle, user, chil
               <p className="hidden truncate text-sm text-muted-foreground md:block">{subtitle}</p>
             )}
           </div>
+          <ThemeToggle className="shrink-0" />
         </header>
         <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6 md:py-8">{children}</div>
       </SidebarInset>

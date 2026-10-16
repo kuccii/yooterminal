@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { BusFront, MapPin } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 import UserMenu from '@/components/UserMenu';
+import ThemeToggle from '@/components/ThemeToggle';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +54,7 @@ export default function Header() {
               Sign in
             </Link>
           )}
+          <ThemeToggle />
         </div>
       </div>
 
