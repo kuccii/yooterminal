@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+﻿import nodemailer from 'nodemailer';
 
 let transporter = null;
 
@@ -19,11 +19,10 @@ export function emailConfigured() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
-/** Send mail when SMTP is configured; otherwise warn (never throw). */
 export async function sendMailSafe({ to, subject, text, html = undefined }) {
   const tx = getTransporter();
   if (!tx) {
-    console.warn(`[mailer] Email not delivered to ${to} — SMTP is not configured (set SMTP_HOST / SMTP_USER / SMTP_PASS). Subject: ${subject}`);
+    console.warn(`[mailer] Email not delivered to ${to} - SMTP is not configured (set SMTP_HOST / SMTP_USER / SMTP_PASS). Subject: ${subject}`);
     return false;
   }
   try {

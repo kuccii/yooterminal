@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { getCaller, googleEnabled } from './auth.js';
+import { toNodeHandler } from 'better-auth/node';
+import { auth, getCaller, googleEnabled } from './auth.js';
 import { createEntityRouter, HttpError } from './entities.js';
 import { createPaymentsRouter } from './payments.js';
 import { createCouponsRouter } from './coupons.js';
@@ -18,6 +19,8 @@ const PORT = Number(process.env.PORT) || 3001;
 
 const app = express();
 app.disable('x-powered-by');
+
+app.all('/api/auth/*splat', toNodeHandler(auth));
 
 app.use(express.json());
 

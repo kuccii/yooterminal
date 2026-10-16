@@ -1,74 +1,94 @@
-import { createClerkClient } from '@clerk/express';
+import { betterAuth } from 'better-auth';
 import { sqlite } from './db.js';
+import { sendMailSafe } from './mailer.js';
 
-if (!process.env.CLERK_SECRET_KEY) {
+if (!process.env.BETTER_AUTH_SECRET) {
   console.error(
-    '[server] CLERK_SECRET_KEY is not set. Set it in the process environment (pm2 env / shell) and restart. Refusing to start.',
+    '[server] BETTER_AUTH_SECRET is not set. Set it in the process environment (pm2 env / shell) and restart. Refusing to start.',
   );
   process.exit(1);
 }
 
-const clerkClient = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY,
-  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const EXTRA_ORIGINS = (process.env.TRUSTED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+export const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
+const logTokens = process.env.AUTH_LOG_TOKENS === '1';
+
+export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3001',
+  basePath: '/api/auth',
+  trustedOrigins: [CLIENT_ORIGIN, ...EXTRA_ORIGINS],
+  database: sqlite,
+  emailAndPassword: {
+    enabled: true,
+    sendResetPassword: async ({ user, token }) => {
+      const link = `${CLIENT_ORIGIN}/reset-password?token=${encodeURIComponent(token)}`;
+      if (logTokens) {
+        console.log(`[auth] Password reset requested for ${user.email}`);
+        console.log(`[auth]   Open this link: ${link}`);
+      }
+      const sent = await sendMailSafe({
+        to: user.email,
+        subject: 'Reset your YooTerminal password',
+        text: `Someone asked to reset the password for your YooTerminal account.\n\nOpen this link within 1 hour to choose a new password:\n${link}\n\nIf you did not request this, you can ignore this email.`,
+      });
+      if (!sent && !logTokens) {
+        console.warn(`[auth] Password reset requested for ${user.email} - email could not be delivered.`);
+      }
+    },
+  },
+  ...(googleEnabled
+    ? {
+      socialProviders: {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+      },
+    }
+    : {}),
 });
 
-function extractBearer(req) {
-  const header = req.headers.authorization || '';
-  return header.startsWith('Bearer ') ? header.slice(7) : null;
-}
-
-function extractSessionCookie(req) {
-  const cookie = req.headers.cookie || '';
-  const match = cookie.match(/(?:^|;\s*)__session=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function upsertAppUser({ clerkId, email, fullName }) {
+function upsertAppUser({ authId, email, fullName }) {
   const now = new Date().toISOString();
   const normalizedEmail = String(email || '').toLowerCase();
   const existing = sqlite
     .prepare('SELECT id, role, full_name FROM app_user WHERE email = ?')
     .get(normalizedEmail);
   if (existing) {
-    sqlite
-      .prepare('UPDATE app_user SET clerk_id = ?, full_name = ?, updated_date = ? WHERE id = ?')
-      .run(clerkId, fullName || existing.full_name || '', now, existing.id);
+    const nextName = fullName || existing.full_name || '';
+    if (nextName !== existing.full_name) {
+      sqlite
+        .prepare('UPDATE app_user SET full_name = ?, updated_date = ? WHERE id = ?')
+        .run(nextName, now, existing.id);
+    }
     return {
       id: String(existing.id),
       email: normalizedEmail,
       role: existing.role,
-      name: existing.full_name || fullName || '',
+      name: nextName,
     };
   }
   const result = sqlite
     .prepare('INSERT INTO app_user (clerk_id, email, full_name, role, created_date) VALUES (?, ?, ?, ?, ?)')
-    .run(clerkId, normalizedEmail, fullName || '', 'user', now);
+    .run(authId, normalizedEmail, fullName || '', 'user', now);
   return { id: String(result.lastInsertRowid), email: normalizedEmail, role: 'user', name: fullName || '' };
 }
 
-/** Resolve the signed-in user for a request, or null. */
 export async function getCaller(req) {
-  const token = extractSessionCookie(req) || extractBearer(req);
-  if (!token) return null;
   try {
-    const request = new Request(`${req.protocol}://${req.headers.host}${req.url}`, {
-      method: req.method,
-      headers: { cookie: req.headers.cookie || '', authorization: `Bearer ${token}` },
-    });
-    const { isAuthenticated, toAuth } = await clerkClient.authenticateRequest(request);
-    if (!isAuthenticated) return null;
-    const authObject = toAuth();
-    const userId = authObject.userId;
-    if (!userId) return null;
-    const user = await clerkClient.users.getUser(userId);
-    const email = String(user.primaryEmailAddress?.emailAddress || '').toLowerCase();
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session || !session.user) return null;
+    const email = String(session.user.email || '').toLowerCase();
     if (!email) return null;
-    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
-    return upsertAppUser({ clerkId: userId, email, fullName });
+    return upsertAppUser({ authId: session.user.id, email, fullName: session.user.name || '' });
   } catch {
     return null;
   }
 }
-
-export const googleEnabled = true;

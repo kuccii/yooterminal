@@ -37,7 +37,7 @@ function ensureUser({ email, name, role }) {
   const result = sqlite
     .prepare('INSERT INTO app_user (email, full_name, role, created_date) VALUES (?, ?, ?, ?)')
     .run(normalizedEmail, name || email, role, new Date().toISOString());
-  console.log(`[seed] Seeded ${role}: ${email} (sign in via Clerk to activate)`);
+  console.log(`[seed] Seeded ${role}: ${email}`);
   return String(result.lastInsertRowid);
 }
 
@@ -225,7 +225,7 @@ async function seed() {
   for (const booking of BOOKINGS) insert('booking', { ...booking, id: newId(), created_date: now });
 
   console.log(`[seed] Done - ${CITIES.length} cities, ${ROUTES.length} routes, ${SCHEDULES.length} schedules, ${OPERATORS.length} operators.`);
-  console.log('[seed] Seeded roles in app_user: admin@example.com (admin), operator@example.com and kigali.ops@example.com (operator). Sign in via Clerk to activate.');
+  console.log('[seed] Seeded roles in app_user: admin@example.com (admin), operator@example.com and kigali.ops@example.com (operator).');
 }
 
 seed()

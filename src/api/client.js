@@ -1,24 +1,13 @@
 const API_BASE = '/api';
 
-let authTokenProvider = null;
-
-export function setAuthTokenProvider(provider) {
-  authTokenProvider = provider;
-}
-
 async function request(path, options = {}) {
-  const headers = {
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-    ...(options.headers || {}),
-  };
-  if (authTokenProvider) {
-    const token = await authTokenProvider().catch(() => null);
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     ...options,
-    headers,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
   });
 
   let data = null;
@@ -89,6 +78,50 @@ export const db = {
       return (await currentUser()) !== null;
     },
     me: currentUser,
+    async loginViaEmailPassword(email, password) {
+      await request('/auth/sign-in/email', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      return currentUser();
+    },
+    async register({ email, password, name }) {
+      await request('/auth/sign-up/email', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, name: name || email.split('@')[0] }),
+      });
+      return currentUser();
+    },
+    async logout() {
+      await request('/auth/sign-out', { method: 'POST' });
+    },
+    async resetPasswordRequest(email) {
+      await request('/auth/forget-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          redirectTo: `${window.location.origin}/reset-password`,
+        }),
+      });
+    },
+    async resetPassword({ resetToken, newPassword }) {
+      await request('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token: resetToken, newPassword }),
+      });
+    },
+    async loginWithProvider(provider, returnTo) {
+      const data = await request('/auth/sign-in/social', {
+        method: 'POST',
+        body: JSON.stringify({
+          provider,
+          callbackURL: returnTo || '/',
+        }),
+      });
+      if (data && data.url) {
+        window.location.href = data.url;
+      }
+    },
   },
 };
 
