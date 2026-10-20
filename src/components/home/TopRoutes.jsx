@@ -1,6 +1,6 @@
 import db from '@/api/client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 
@@ -13,18 +13,27 @@ export default function TopRoutes() {
   const { content } = useSiteContent();
   const [routes, setRoutes] = useState([]);
 
+  const picked = useMemo(() => (Array.isArray(content.home_routes) ? content.home_routes : []), [content.home_routes]);
+
   useEffect(() => {
     let active = true;
     db.entities.Route
-      .filter({ popular: true }, { sort: 'from_price', limit: 8 })
+      .list({ sort: 'from_price', limit: 200 })
       .then((page) => {
-        if (active) setRoutes(page.items || []);
+        if (!active) return;
+        const all = page.items || [];
+        if (picked.length) {
+          const bySlug = new Map(all.map((route) => [route.slug, route]));
+          setRoutes(picked.map((slug) => bySlug.get(slug)).filter(Boolean).slice(0, 8));
+        } else {
+          setRoutes(all.filter((route) => route.popular).slice(0, 8));
+        }
       })
       .catch(() => {});
     return () => {
       active = false;
     };
-  }, []);
+  }, [picked]);
 
   if (!routes.length) return null;
 

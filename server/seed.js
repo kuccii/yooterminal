@@ -144,6 +144,7 @@ const SITE_CONTENT = [
   { key: 'trust_note', value: json('Reviews from passengers who travelled with our partner operators') },
   { key: 'operators_heading', value: json('Bus companies on the network') },
   { key: 'routes_heading', value: json('Top travelled bus routes') },
+  { key: 'home_routes', value: json(['kampala-kigali', 'kampala-entebbe', 'kampala-jinja', 'kigali-musanze', 'kigali-gisenyi']) },
   { key: 'countries_heading', value: json('Popular places in Uganda & Rwanda') },
   { key: 'footer_tagline', value: json('Compare and book bus tickets across Uganda and Rwanda. Instant e-tickets, secure payment and 24/7 support.') },
   { key: 'countries', value: json([{ name: 'Uganda', image: '/images/kampala.svg' }, { name: 'Rwanda', image: '/images/kigali.svg' }]) },

@@ -14,6 +14,7 @@ const DEFAULT_CONTENT = {
   trust_note: 'Reviews from passengers who travelled with our partner operators',
   operators_heading: 'Bus companies on the network',
   routes_heading: 'Top travelled bus routes',
+  home_routes: [],
   countries_heading: 'Popular places in Uganda & Rwanda',
   footer_tagline:
     'Compare and book bus tickets across Uganda and Rwanda. Instant e-tickets, secure payment and 24/7 support.',
@@ -91,6 +92,12 @@ function sanitizeLinkList(value) {
   return items.length ? items : null;
 }
 
+function sanitizeSlugList(value) {
+  if (!Array.isArray(value)) return null;
+  const items = value.filter((row) => typeof row === 'string' && row.trim());
+  return items.length ? items : null;
+}
+
 function sanitizeCountries(value) {
   if (!Array.isArray(value)) return null;
   const items = value.filter(
@@ -124,7 +131,12 @@ function mergeContent(incoming) {
   for (const [key, fallback] of Object.entries(DEFAULT_CONTENT)) {
     const value = source[key];
     if (Array.isArray(fallback)) {
-      merged[key] = key === 'countries' ? sanitizeCountries(value) || fallback : sanitizeLinkList(value) || fallback;
+      merged[key] =
+        key === 'countries'
+          ? sanitizeCountries(value) || fallback
+          : key === 'home_routes'
+            ? sanitizeSlugList(value) || fallback
+            : sanitizeLinkList(value) || fallback;
     } else if (value === undefined || value === null || value === '') {
       merged[key] = fallback;
     } else {

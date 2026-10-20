@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import FormField from '@/components/manage/FormField';
 import ImageField from '@/components/admin/ImageField';
@@ -45,6 +46,7 @@ function buildForm(content) {
   const form = {};
   for (const key of SCALAR_KEYS) form[key] = typeof content[key] === 'string' ? content[key] : '';
   form.countries = toCountryRows(content.countries);
+  form.home_routes = Array.isArray(content.home_routes) ? content.home_routes.filter((slug) => typeof slug === 'string') : [];
   form.footer_routes = toLinkRows(content.footer_routes);
   form.footer_ug_cities = toLinkRows(content.footer_ug_cities);
   form.footer_rw_cities = toLinkRows(content.footer_rw_cities);
@@ -89,10 +91,36 @@ export default function AdminSiteContentSection() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(() => buildForm(content));
   const [busy, setBusy] = useState(false);
+  const [routes, setRoutes] = useState([]);
+  const [picker, setPicker] = useState('');
 
   const openEditor = () => {
     setForm(buildForm(content));
+    setPicker('');
     setOpen(true);
+    db.entities.Route
+      .list({ sort: 'origin_city', limit: 200 })
+      .then((page) => setRoutes(page.items || []))
+      .catch(() => setRoutes([]));
+  };
+
+  const routeLabel = (slug) => {
+    const route = routes.find((item) => item.slug === slug);
+    return route ? `${route.origin_city} → ${route.destination_city}` : slug;
+  };
+
+  const moveRoute = (index, delta) => {
+    const next = [...form.home_routes];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setValue('home_routes', next);
+  };
+
+  const addRoute = (slug) => {
+    setPicker('');
+    if (!slug || form.home_routes.includes(slug)) return;
+    setValue('home_routes', [...form.home_routes, slug]);
   };
 
   const setValue = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -101,6 +129,7 @@ export default function AdminSiteContentSection() {
     setBusy(true);
     const payloadByKey = {};
     for (const key of SCALAR_KEYS) payloadByKey[key] = String(form[key] ?? '').trim();
+    payloadByKey.home_routes = form.home_routes.filter((slug) => slug.trim());
     payloadByKey.countries = form.countries
       .filter((row) => row.name.trim())
       .map((row) => ({ name: row.name.trim(), image: row.image.trim() }));
@@ -159,6 +188,10 @@ export default function AdminSiteContentSection() {
         </p>
         <p className="text-muted-foreground">
           <span className="font-medium text-foreground">Countries:</span> {countryCount} shown
+        </p>
+        <p className="text-muted-foreground">
+          <span className="font-medium text-foreground">Top routes:</span>{' '}
+          {content.home_routes?.length ? `${content.home_routes.length} picked` : 'popular routes'}
         </p>
         <p className="text-muted-foreground">
           <span className="font-medium text-foreground">Footer links:</span> {linkCount}
@@ -240,6 +273,64 @@ export default function AdminSiteContentSection() {
                   onChange={(event) => setValue('countries_heading', event.target.value)}
                 />
               </FormField>
+            </div>
+
+            <div className="space-y-3 border-t border-border pt-4">
+              <div>
+                <p className="font-display text-sm font-bold">Top travelled routes</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pick the routes shown under the top routes heading, in display order. Leave empty to show every route
+                  marked popular.
+                </p>
+              </div>
+              {form.home_routes.map((slug, index) => (
+                <div key={slug} className="flex items-center gap-2 rounded-xl border border-border p-2">
+                  <span className="flex-1 truncate text-sm font-medium">{routeLabel(slug)}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={index === 0}
+                    onClick={() => moveRoute(index, -1)}
+                  >
+                    Up
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={index === form.home_routes.length - 1}
+                    onClick={() => moveRoute(index, 1)}
+                  >
+                    Down
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setValue('home_routes', form.home_routes.filter((item) => item !== slug))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              {!form.home_routes.length && (
+                <p className="text-sm text-muted-foreground">No routes picked — showing popular routes.</p>
+              )}
+              <Select value={picker} onValueChange={addRoute}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Add a route" />
+                </SelectTrigger>
+                <SelectContent>
+                  {routes
+                    .filter((route) => !form.home_routes.includes(route.slug))
+                    .map((route) => (
+                      <SelectItem key={route.slug} value={route.slug}>
+                        {route.origin_city} → {route.destination_city}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-3 border-t border-border pt-4">
