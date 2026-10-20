@@ -16,7 +16,7 @@ import {
 import { countCouponRedemptions, findCouponForCart } from './coupons.js';
 import { writeAuditLog } from './audit.js';
 import { createNotification, notifyBookingStaff } from './notify.js';
-import { queueBookingReceipt, queueCancellationNotice } from './outbox.js';
+import { queueBookingReceipt, queueCancellationNotice, queueRefundNotice } from './outbox.js';
 
 const FLW_VERIFY_URL = 'https://api.flutterwave.com/v3/transactions';
 const FLW_REFUND_URL = 'https://api.flutterwave.com/v3/refunds';
@@ -53,6 +53,7 @@ export async function attemptRefund(booking) {
       link: `/booking/${booking.booking_ref}`,
     });
     notifyBookingStaff(booking, status === 'refunded' ? 'refunded' : 'refund_pending');
+    if (status === 'refunded') void queueRefundNotice(booking);
   }
   writeAuditLog({
     actorId: null,
@@ -607,6 +608,7 @@ export function createPaymentsRouter() {
           link: `/booking/${booking.booking_ref}`,
         });
         notifyBookingStaff(booking, 'refunded');
+        void queueRefundNotice(booking);
         writeAuditLog({
           actorId: null,
           action: 'refund.webhook_confirmed',

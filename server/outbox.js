@@ -6,6 +6,7 @@ import {
   buildBookingConfirmation,
   buildCancellation,
   buildDepartureReminder,
+  buildRefundConfirmation,
   buildTicketTemplateParams,
 } from './notifications.js';
 
@@ -93,6 +94,18 @@ export function queueCancellationNotice(booking) {
     text: message.text,
     html: message.html,
     dedupeKey: `cancel:${booking.booking_ref}:email`,
+  });
+}
+
+export function queueRefundNotice(booking) {
+  if (!booking) return null;
+  const message = buildRefundConfirmation(booking);
+  return queueEmail({
+    to: booking.contact_email,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+    dedupeKey: `refund:${booking.booking_ref}:email`,
   });
 }
 

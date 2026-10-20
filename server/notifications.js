@@ -153,6 +153,35 @@ export async function sendCancellation(booking) {
   return sendMailSafe(buildCancellation(booking));
 }
 
+export function buildRefundConfirmation(booking) {
+  const rows = [
+    ...tripDetailRows(booking),
+    ['Booking ref', booking.booking_ref],
+    ['Refunded', formatMoney(booking.amount, booking.currency)],
+  ];
+  return {
+    to: booking.contact_email,
+    subject: `Refund processed — ${booking.booking_ref}`,
+    text: [
+      `Your refund for booking ${booking.booking_ref} has been processed.`,
+      '',
+      ...rows.map(([label, value]) => `${label}: ${value}`),
+      '',
+      'The funds should appear on your original payment method shortly.',
+    ].join('\n'),
+    html: wrapHtml(
+      'Refund processed',
+      `Your refund for booking <strong>${booking.booking_ref}</strong> has been processed.`,
+      rows,
+      'The funds should appear on your original payment method shortly.',
+    ),
+  };
+}
+
+export async function sendRefundConfirmation(booking) {
+  return sendMailSafe(buildRefundConfirmation(booking));
+}
+
 export function buildDepartureReminder(booking) {
   const rows = [
     ...tripDetailRows(booking),
