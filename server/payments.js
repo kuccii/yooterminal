@@ -15,8 +15,8 @@ import {
 } from './booking.js';
 import { countCouponRedemptions, findCouponForCart } from './coupons.js';
 import { writeAuditLog } from './audit.js';
-import { sendBookingConfirmation, sendCancellation } from './notifications.js';
-import { createNotification } from './notify.js';
+import { createNotification, notifyBookingStaff } from './notify.js';
+import { queueBookingReceipt, queueCancellationNotice } from './outbox.js';
 
 const FLW_VERIFY_URL = 'https://api.flutterwave.com/v3/transactions';
 const FLW_REFUND_URL = 'https://api.flutterwave.com/v3/refunds';
@@ -52,6 +52,7 @@ export async function attemptRefund(booking) {
         : `Your refund for booking ${booking.booking_ref} is pending.`,
       link: `/booking/${booking.booking_ref}`,
     });
+    notifyBookingStaff(booking, status === 'refunded' ? 'refunded' : 'refund_pending');
   }
   writeAuditLog({
     actorId: null,
@@ -423,7 +424,7 @@ export function createPaymentsRouter() {
       }),
     )();
 
-    for (const booking of bookings) void sendBookingConfirmation(booking);
+    for (const booking of bookings) void queueBookingReceipt(booking);
     void createNotification({
       userId: caller.id,
       type: 'booking_confirmed',
@@ -431,6 +432,7 @@ export function createPaymentsRouter() {
       message: `Your booking ${bookings[0].booking_ref} is confirmed.`,
       link: `/booking/${bookings[0].booking_ref}`,
     });
+    notifyBookingStaff(bookings[0], 'confirmed');
 
     res.json({
       ...serializeBooking(bookings[0]),
@@ -519,7 +521,7 @@ export function createPaymentsRouter() {
         before: { status: row.status, refund_status: row.refund_status || null },
         after: { status: 'cancelled', refund_status: refundStatus },
       });
-      void sendCancellation({ ...row, refund_status: refundStatus });
+      void queueCancellationNotice({ ...row, refund_status: refundStatus });
     }
 
     void createNotification({
@@ -529,6 +531,7 @@ export function createPaymentsRouter() {
       message: `Your booking ${booking.booking_ref} has been cancelled.`,
       link: `/booking/${booking.booking_ref}`,
     });
+    notifyBookingStaff(booking, 'cancelled');
 
     res.json({
       booking_ref: booking.booking_ref,
@@ -561,7 +564,8 @@ export function createPaymentsRouter() {
           .prepare("UPDATE booking SET status = 'paid', payment_tx_id = ?, paid_at = ? WHERE id = ? AND status != 'paid'")
           .run(String(data.id ?? ''), now, booking.id);
         const fresh = sqlite.prepare('SELECT * FROM booking WHERE id = ?').get(booking.id);
-        void sendBookingConfirmation(fresh);
+        void queueBookingReceipt(fresh);
+        notifyBookingStaff(fresh, 'confirmed');
         writeAuditLog({
           actorId: null,
           action: 'booking.webhook_paid',
@@ -602,6 +606,7 @@ export function createPaymentsRouter() {
           message: `Your refund for booking ${booking.booking_ref} has been processed.`,
           link: `/booking/${booking.booking_ref}`,
         });
+        notifyBookingStaff(booking, 'refunded');
         writeAuditLog({
           actorId: null,
           action: 'refund.webhook_confirmed',

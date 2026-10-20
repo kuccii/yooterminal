@@ -5,12 +5,71 @@ import { getCaller } from './auth.js';
 import { HttpError } from './entities.js';
 
 export function createNotification({ userId, type, title, message, link }) {
+  if (!userId) return null;
   const id = randomUUID();
   const now = new Date().toISOString();
   sqlite
     .prepare('INSERT INTO notification (id, user_id, type, title, message, link, read, created_date) VALUES (?, ?, ?, ?, ?, ?, 0, ?)')
     .run(id, userId, type, title, message, link || null, now);
   return { id, user_id: userId, type, title, message, link: link || null, read: 0, created_date: now };
+}
+
+function userIdForEmail(email) {
+  if (!email) return null;
+  const row = sqlite.prepare('SELECT id FROM user WHERE lower(email) = lower(?) LIMIT 1').get(String(email).trim());
+  return row?.id || null;
+}
+
+function adminUserIds() {
+  return sqlite.prepare("SELECT id FROM user WHERE role = 'admin'").all().map((row) => row.id);
+}
+
+function money(booking) {
+  const value = Number(booking.amount) || 0;
+  return `${booking.currency || 'UGX'} ${value.toLocaleString('en-US')}`;
+}
+
+function seatCount(booking) {
+  try {
+    const seats = JSON.parse(booking.seats || '[]');
+    return Array.isArray(seats) && seats.length ? seats.length : Number(booking.passenger_count) || 1;
+  } catch {
+    return Number(booking.passenger_count) || 1;
+  }
+}
+
+const STAFF_EVENTS = {
+  confirmed: { type: 'booking_new', title: 'New booking' },
+  cancelled: { type: 'booking_cancelled', title: 'Booking cancelled' },
+  refunded: { type: 'refund_processed', title: 'Refund completed' },
+  refund_pending: { type: 'refund_pending', title: 'Refund pending' },
+};
+
+export function notifyBookingStaff(booking, event) {
+  if (!booking) return [];
+  const meta = STAFF_EVENTS[event];
+  if (!meta) return [];
+  const summary = `${booking.booking_ref} · ${booking.origin_city || '—'} → ${booking.destination_city || '—'} · ${booking.travel_date || '—'} · ${seatCount(booking)} seat(s) · ${money(booking)}`;
+
+  const targets = new Map();
+  const operatorUserId = userIdForEmail(booking.operator_owner_email);
+  if (operatorUserId) targets.set(operatorUserId, '/operator');
+  for (const adminId of adminUserIds()) {
+    if (!targets.has(adminId)) targets.set(adminId, '/admin');
+  }
+
+  const created = [];
+  for (const [userId, link] of targets) {
+    const row = createNotification({
+      userId,
+      type: meta.type,
+      title: meta.title,
+      message: summary,
+      link,
+    });
+    if (row) created.push(row);
+  }
+  return created;
 }
 
 function serializeNotification(row) {

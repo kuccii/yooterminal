@@ -64,13 +64,17 @@ function wrapHtml(title, intro, rows, footer) {
   );
 }
 
-export async function sendBookingConfirmation(booking) {
+export function ticketUrl(bookingRef) {
+  return `${CLIENT_ORIGIN}/booking/${bookingRef}`;
+}
+
+export function buildBookingConfirmation(booking) {
   const rows = [
     ...tripDetailRows(booking),
     ['Paid', formatMoney(booking.amount, booking.currency)],
     ['Booking ref', booking.booking_ref],
   ];
-  return sendMailSafe({
+  return {
     to: booking.contact_email,
     subject: `Booking confirmed — ${booking.booking_ref}`,
     text: [
@@ -78,18 +82,45 @@ export async function sendBookingConfirmation(booking) {
       '',
       ...rows.map(([label, value]) => `${label}: ${value}`),
       '',
-      `View your ticket: ${CLIENT_ORIGIN}/booking/${booking.booking_ref}`,
+      `View your ticket: ${ticketUrl(booking.booking_ref)}`,
     ].join('\n'),
     html: wrapHtml(
       'Booking confirmed',
       `Your booking <strong>${booking.booking_ref}</strong> is confirmed. Have your ticket ready at boarding.`,
       rows,
-      `View your ticket: <a href="${CLIENT_ORIGIN}/booking/${booking.booking_ref}">${CLIENT_ORIGIN}/booking/${booking.booking_ref}</a>`,
+      `View your ticket: <a href="${ticketUrl(booking.booking_ref)}">${ticketUrl(booking.booking_ref)}</a>`,
     ),
-  });
+  };
 }
 
-export async function sendCancellation(booking) {
+export function buildTicketMessage(booking) {
+  return [
+    `Booking ${booking.booking_ref} confirmed`,
+    `${booking.origin_city || '—'} → ${booking.destination_city || '—'}`,
+    `${booking.operator_name || '—'} · ${formatTravelDate(booking.travel_date)} · ${booking.departure_time || '—'}`,
+    `Seats ${seatLabels(booking)}`,
+    `Paid ${formatMoney(booking.amount, booking.currency)}`,
+    `Ticket ${ticketUrl(booking.booking_ref)}`,
+  ].join('\n');
+}
+
+export function buildTicketTemplateParams(booking) {
+  return [
+    booking.contact_name || passengerNames(booking),
+    booking.booking_ref,
+    `${booking.origin_city || '—'} → ${booking.destination_city || '—'}`,
+    `${formatTravelDate(booking.travel_date)} ${booking.departure_time || ''}`.trim(),
+    seatLabels(booking),
+    formatMoney(booking.amount, booking.currency),
+  ];
+}
+
+export async function sendBookingConfirmation(booking) {
+  const message = buildBookingConfirmation(booking);
+  return sendMailSafe(message);
+}
+
+export function buildCancellation(booking) {
   const refundCopy = {
     refunded: 'Your refund has been issued to the original payment method.',
     refund_pending: 'Your refund has been requested and should reach your account within a few days.',
@@ -101,7 +132,7 @@ export async function sendCancellation(booking) {
     ['Booking ref', booking.booking_ref],
     ['Refund', refundNote],
   ];
-  return sendMailSafe({
+  return {
     to: booking.contact_email,
     subject: `Booking cancelled — ${booking.booking_ref}`,
     text: [
@@ -115,15 +146,19 @@ export async function sendCancellation(booking) {
       rows,
       'Need help? Reply to this email or contact the operator directly.',
     ),
-  });
+  };
 }
 
-export async function sendDepartureReminder(booking) {
+export async function sendCancellation(booking) {
+  return sendMailSafe(buildCancellation(booking));
+}
+
+export function buildDepartureReminder(booking) {
   const rows = [
     ...tripDetailRows(booking),
     ['Booking ref', booking.booking_ref],
   ];
-  return sendMailSafe({
+  return {
     to: booking.contact_email,
     subject: `Departure tomorrow — ${booking.origin_city} → ${booking.destination_city}`,
     text: [
@@ -137,7 +172,11 @@ export async function sendDepartureReminder(booking) {
       'Departure tomorrow',
       'Your bus leaves tomorrow. Please arrive at the station at least 30 minutes before departure.',
       rows,
-      `Ticket details: <a href="${CLIENT_ORIGIN}/booking/${booking.booking_ref}">${CLIENT_ORIGIN}/booking/${booking.booking_ref}</a>`,
+      `Ticket details: <a href="${ticketUrl(booking.booking_ref)}">${ticketUrl(booking.booking_ref)}</a>`,
     ),
-  });
+  };
+}
+
+export async function sendDepartureReminder(booking) {
+  return sendMailSafe(buildDepartureReminder(booking));
 }

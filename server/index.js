@@ -15,8 +15,8 @@ import { createNotificationsRouter } from './notify.js';
 import { UPLOADS_DIR } from './uploads.js';
 import { sweepExpiredHolds } from './booking.js';
 import { runRefundQueue } from './payments.js';
-import { sendDepartureReminder } from './notifications.js';
 import { createNotification } from './notify.js';
+import { queueDepartureReminder, runOutbox } from './outbox.js';
 import { sqlite } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -128,7 +128,7 @@ function runDepartureReminders() {
       .all(tomorrowISO());
     for (const booking of rows) {
       sqlite.prepare('UPDATE booking SET reminder_sent = 1 WHERE id = ?').run(booking.id);
-      void sendDepartureReminder(booking);
+      queueDepartureReminder(booking);
       void createNotification({
         userId: booking.created_by_id,
         type: 'departure_reminder',
@@ -162,6 +162,15 @@ setInterval(() => {
     console.error('[server] Seat hold sweep failed:', error);
   }
 }, HOLD_SWEEP_INTERVAL_MS);
+
+const OUTBOX_INTERVAL_MS = 60 * 1000;
+function runDeliveryOutbox() {
+  runOutbox().catch((error) => {
+    console.error('[server] Delivery outbox run failed:', error);
+  });
+}
+setInterval(runDeliveryOutbox, OUTBOX_INTERVAL_MS);
+runDeliveryOutbox();
 
 app.listen(PORT, () => {
   console.log(`[server] API listening on http://localhost:${PORT}`);
