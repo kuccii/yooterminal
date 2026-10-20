@@ -6,10 +6,13 @@ import CityPicker from '@/components/CityPicker';
 import DateField from '@/components/DateField';
 import PassengerField from '@/components/PassengerField';
 import { useCities } from '@/hooks/useCities';
+import { useSiteContent } from '@/lib/SiteContentContext';
 import { shiftDays, todayISO } from '@/lib/format';
 
 export default function SearchForm({ initialFrom, initialTo, initialDate, initialPassengers, initialReturnDate, className, onSearch }) {
   const cities = useCities();
+  const { content } = useSiteContent();
+  const roundTrips = content.round_trip_enabled === true;
   const navigate = useNavigate();
   const [from, setFrom] = useState(null);
   const [to, setTo] = useState(null);
@@ -31,6 +34,12 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
     if (returnDate < date) setReturnDate(date);
   }, [date, returnDate]);
 
+  useEffect(() => {
+    if (!roundTrips) setTripType('oneway');
+  }, [roundTrips]);
+
+  const isReturn = roundTrips && tripType === 'return';
+
   const swap = () => {
     setFrom(to);
     setTo(from);
@@ -46,7 +55,7 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
       setError('Your departure and arrival cities must be different.');
       return;
     }
-    if (tripType === 'return' && returnDate < date) {
+    if (isReturn && returnDate < date) {
       setError('Your return date cannot be before your outbound date.');
       return;
     }
@@ -57,7 +66,7 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
       date,
       passengers: String(passengers),
     });
-    if (tripType === 'return') params.set('return_date', returnDate);
+    if (isReturn) params.set('return_date', returnDate);
     if (onSearch) {
       onSearch(params);
     } else {
@@ -88,31 +97,33 @@ export default function SearchForm({ initialFrom, initialTo, initialDate, initia
           Search
         </Button>
       </div>
-      <div className="flex flex-wrap items-center gap-3 px-2 pb-2 pt-1">
-        <div className="flex rounded-full border border-border p-0.5">
-          {[
-            ['oneway', 'One-way'],
-            ['return', 'Return'],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTripType(id)}
-              className={`rounded-full px-3.5 py-1 text-sm font-semibold transition ${
-                tripType === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {tripType === 'return' && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Coming back</span>
-            <DateField value={returnDate} onChange={setReturnDate} />
+      {roundTrips && (
+        <div className="flex flex-wrap items-center gap-3 px-2 pb-2 pt-1">
+          <div className="flex rounded-full border border-border p-0.5">
+            {[
+              ['oneway', 'One-way'],
+              ['return', 'Return'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTripType(id)}
+                className={`rounded-full px-3.5 py-1 text-sm font-semibold transition ${
+                  tripType === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+          {isReturn && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Coming back</span>
+              <DateField value={returnDate} onChange={setReturnDate} />
+            </div>
+          )}
+        </div>
+      )}
       {error && <p className="px-3 pb-2 pt-1 text-sm font-medium text-destructive">{error}</p>}
     </form>
   );

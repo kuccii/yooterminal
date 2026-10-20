@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/AuthContext';
+import { useSiteContent } from '@/lib/SiteContentContext';
 import { buildTrip, parseTripKey } from '@/lib/trips';
 import { formatMoney } from '@/lib/format';
 
@@ -22,6 +23,8 @@ export default function TripDetail() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { content } = useSiteContent();
+  const roundTrips = content.round_trip_enabled === true;
   const wanted = Number(params.get('passengers') || 1);
 
   const parsed = useMemo(() => parseTripKey(tripKey), [tripKey]);
@@ -253,7 +256,7 @@ export default function TripDetail() {
       contact_phone: contact.phone.trim(),
       amount: Number(trip.price) * selected.length,
     };
-    if (params.get('returning') === '1') {
+    if (roundTrips && params.get('returning') === '1') {
       let outbound = null;
       try {
         outbound = JSON.parse(sessionStorage.getItem('yoo_return_draft') || 'null');
@@ -271,7 +274,7 @@ export default function TripDetail() {
       });
       return;
     }
-    const returnDate = params.get('return_date');
+    const returnDate = roundTrips ? params.get('return_date') : null;
     if (returnDate) {
       sessionStorage.setItem('yoo_return_draft', JSON.stringify(legDraft));
       const returnParams = new URLSearchParams({

@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import FormField from '@/components/manage/FormField';
 import ImageField from '@/components/admin/ImageField';
@@ -47,6 +48,7 @@ function buildForm(content) {
   for (const key of SCALAR_KEYS) form[key] = typeof content[key] === 'string' ? content[key] : '';
   form.countries = toCountryRows(content.countries);
   form.home_routes = Array.isArray(content.home_routes) ? content.home_routes.filter((slug) => typeof slug === 'string') : [];
+  form.round_trip_enabled = content.round_trip_enabled === true;
   form.footer_routes = toLinkRows(content.footer_routes);
   form.footer_ug_cities = toLinkRows(content.footer_ug_cities);
   form.footer_rw_cities = toLinkRows(content.footer_rw_cities);
@@ -130,6 +132,7 @@ export default function AdminSiteContentSection() {
     const payloadByKey = {};
     for (const key of SCALAR_KEYS) payloadByKey[key] = String(form[key] ?? '').trim();
     payloadByKey.home_routes = form.home_routes.filter((slug) => slug.trim());
+    payloadByKey.round_trip_enabled = form.round_trip_enabled === true;
     payloadByKey.countries = form.countries
       .filter((row) => row.name.trim())
       .map((row) => ({ name: row.name.trim(), image: row.image.trim() }));
@@ -195,6 +198,10 @@ export default function AdminSiteContentSection() {
         </p>
         <p className="text-muted-foreground">
           <span className="font-medium text-foreground">Footer links:</span> {linkCount}
+        </p>
+        <p className="text-muted-foreground">
+          <span className="font-medium text-foreground">Round trips:</span>{' '}
+          {content.round_trip_enabled === true ? 'On' : 'Off'}
         </p>
       </div>
 
@@ -273,6 +280,22 @@ export default function AdminSiteContentSection() {
                   onChange={(event) => setValue('countries_heading', event.target.value)}
                 />
               </FormField>
+            </div>
+
+            <div className="space-y-3 border-t border-border pt-4">
+              <p className="font-display text-sm font-bold">Booking options</p>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium">Round trips</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Let passengers search for and book a return leg together with the outbound trip.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.round_trip_enabled}
+                  onCheckedChange={(checked) => setValue('round_trip_enabled', checked)}
+                />
+              </div>
             </div>
 
             <div className="space-y-3 border-t border-border pt-4">

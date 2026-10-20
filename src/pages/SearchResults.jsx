@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { buildTrip, buildTrips, heldSeatsByTrip, seatsLeft, SORT_OPTIONS, TIME_WINDOWS, withBlockedSeats } from '@/lib/trips';
+import { useSiteContent } from '@/lib/SiteContentContext';
 import { formatDateFull, formatDateShort, formatMoney, shiftDays, todayISO } from '@/lib/format';
 
 const EMPTY_FILTERS = { windows: [], operators: [], classes: [], maxPrice: null };
@@ -19,12 +20,14 @@ const EMPTY_FILTERS = { windows: [], operators: [], classes: [], maxPrice: null 
 export default function SearchResults() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { content } = useSiteContent();
+  const roundTrips = content.round_trip_enabled === true;
   const fromSlug = params.get('from') || '';
   const toSlug = params.get('to') || '';
   const travelDate = params.get('date') || todayISO();
   const passengers = Number(params.get('passengers') || 1);
-  const returnDate = params.get('return_date') || '';
-  const returning = params.get('returning') === '1';
+  const returnDate = roundTrips ? params.get('return_date') || '' : '';
+  const returning = roundTrips && params.get('returning') === '1';
   const routeSlug = fromSlug && toSlug ? `${fromSlug}-${toSlug}` : '';
 
   const [route, setRoute] = useState(null);

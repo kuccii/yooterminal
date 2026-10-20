@@ -15,6 +15,7 @@ const DEFAULT_CONTENT = {
   operators_heading: 'Bus companies on the network',
   routes_heading: 'Top travelled bus routes',
   home_routes: [],
+  round_trip_enabled: false,
   countries_heading: 'Popular places in Uganda & Rwanda',
   footer_tagline:
     'Compare and book bus tickets across Uganda and Rwanda. Instant e-tickets, secure payment and 24/7 support.',
@@ -130,7 +131,9 @@ function mergeContent(incoming) {
   const merged = {};
   for (const [key, fallback] of Object.entries(DEFAULT_CONTENT)) {
     const value = source[key];
-    if (Array.isArray(fallback)) {
+    if (typeof fallback === 'boolean') {
+      merged[key] = value === true;
+    } else if (Array.isArray(fallback)) {
       merged[key] =
         key === 'countries'
           ? sanitizeCountries(value) || fallback
