@@ -8,20 +8,21 @@ export function createNotification({ userId, type, title, message, link }) {
   if (!userId) return null;
   const id = randomUUID();
   const now = new Date().toISOString();
+  const ownerId = String(userId);
   sqlite
     .prepare('INSERT INTO notification (id, user_id, type, title, message, link, read, created_date) VALUES (?, ?, ?, ?, ?, ?, 0, ?)')
-    .run(id, userId, type, title, message, link || null, now);
-  return { id, user_id: userId, type, title, message, link: link || null, read: 0, created_date: now };
+    .run(id, ownerId, type, title, message, link || null, now);
+  return { id, user_id: ownerId, type, title, message, link: link || null, read: 0, created_date: now };
 }
 
 function userIdForEmail(email) {
   if (!email) return null;
-  const row = sqlite.prepare('SELECT id FROM user WHERE lower(email) = lower(?) LIMIT 1').get(String(email).trim());
-  return row?.id || null;
+  const row = sqlite.prepare('SELECT id FROM app_user WHERE lower(email) = lower(?) LIMIT 1').get(String(email).trim());
+  return row?.id ? String(row.id) : null;
 }
 
 function adminUserIds() {
-  return sqlite.prepare("SELECT id FROM user WHERE role = 'admin'").all().map((row) => row.id);
+  return sqlite.prepare("SELECT id FROM app_user WHERE role = 'admin'").all().map((row) => String(row.id));
 }
 
 function money(booking) {

@@ -184,7 +184,7 @@ const ENTITIES = {
       user_id: 'text', type: 'text', title: 'text', message: 'text',
       link: 'text', read: 'boolean',
     },
-    access: { read: 'own', create: 'admin', update: 'admin', delete: 'admin' },
+    access: { read: 'own', readOwnColumn: 'user_id', readOwnStrict: true, create: 'admin', update: 'admin', delete: 'admin' },
   },
 };
 
@@ -370,8 +370,12 @@ function readScopeSql(entity, caller, params) {
     return '';
   }
   if (entity.access.read !== 'own') return '';
-  if (isAdmin(caller)) return '';
+  if (isAdmin(caller) && !entity.access.readOwnStrict) return '';
   if (!caller) throw new HttpError(401, 'Sign in required');
+  if (entity.access.readOwnColumn) {
+    params.push(caller.id);
+    return `"${entity.access.readOwnColumn}" = ?`;
+  }
   params.push(caller.id, caller.email);
   return `(created_by_id = ? OR operator_owner_email = ?)`;
 }
