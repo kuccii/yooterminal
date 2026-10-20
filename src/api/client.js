@@ -99,6 +99,25 @@ export const db = {
       return request('/site-content');
     },
   },
+  seats: {
+    async taken(tripKey, travelDate) {
+      const params = new URLSearchParams({ trip_key: tripKey, travel_date: travelDate });
+      return request(`/seats/taken?${params.toString()}`);
+    },
+    async blocked(tripKey, travelDate) {
+      const params = new URLSearchParams({ trip_key: tripKey, travel_date: travelDate });
+      return request(`/seats/blocked?${params.toString()}`);
+    },
+    async block({ tripKey, travelDate, seatLabel, note }) {
+      return request('/seats/blocked', {
+        method: 'POST',
+        body: JSON.stringify({ trip_key: tripKey, travel_date: travelDate, seat_label: seatLabel, note }),
+      });
+    },
+    async unblock(id) {
+      return request(`/seats/blocked/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+  },
   uploads: {
     async list() {
       return request('/admin/uploads');

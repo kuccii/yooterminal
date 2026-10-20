@@ -91,6 +91,16 @@ const ENTITIES = {
     hidden: ['holder_id', 'created_by_id'],
     access: { read: 'public', create: 'admin', update: 'admin', delete: 'admin' },
   },
+  BlockedSeat: {
+    table: 'blocked_seat',
+    required: ['trip_key', 'travel_date', 'seat_label'],
+    columns: {
+      trip_key: 'text', travel_date: 'text', route_slug: 'text', operator_slug: 'text',
+      departure_time: 'text', seat_label: 'text', note: 'text',
+    },
+    hidden: ['created_by_id'],
+    access: { read: 'public', create: 'admin', update: 'admin', delete: 'admin' },
+  },
   Operator: {
     table: 'operator',
     required: ['name', 'slug'],

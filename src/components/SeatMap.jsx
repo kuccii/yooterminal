@@ -3,15 +3,16 @@ import { seatRows } from '@/lib/trips';
 import { cn } from '@/lib/utils';
 
 function SeatButton({ label, state, onToggle }) {
-  const disabled = state === 'taken';
+  const disabled = state === 'taken' || state === 'blocked';
   return (
     <button
       type="button"
       disabled={disabled}
-      onClick={() => onToggle(label)}
+      onClick={() => onToggle?.(label)}
       className={cn(
         'h-10 w-10 rounded-lg border text-xs font-semibold transition',
         state === 'taken' && 'cursor-not-allowed border-border bg-muted text-muted-foreground/50',
+        state === 'blocked' && 'cursor-pointer border-destructive/40 bg-destructive/10 text-destructive',
         state === 'selected' && 'border-primary bg-primary text-primary-foreground shadow-sm',
         state === 'free' && 'border-border bg-card text-foreground hover:border-primary hover:text-primary'
       )}
@@ -21,52 +22,50 @@ function SeatButton({ label, state, onToggle }) {
   );
 }
 
-function seatState(label, taken, selected) {
+function seatState(label, taken, selected, blocked) {
   if (taken.includes(label)) return 'taken';
+  if (blocked.includes(label)) return 'blocked';
   if (selected.includes(label)) return 'selected';
   return 'free';
 }
 
-function SeatPair({ labels, taken, selected, onToggle }) {
+function SeatPair({ labels, taken, selected, blocked, onToggle }) {
   return labels.map((label) => (
-    <SeatButton key={label} label={label} state={seatState(label, taken, selected)} onToggle={onToggle} />
+    <SeatButton key={label} label={label} state={seatState(label, taken, selected, blocked)} onToggle={onToggle} />
   ));
 }
 
-function SeatRow({ row, taken, selected, onToggle }) {
+function SeatRow({ row, taken, selected, blocked, onToggle }) {
   if (row.length === 5) {
-    // Rear bench: 2 | 1 | 2 across the full width of the coach.
     return (
       <div className="flex items-center justify-center gap-1.5">
-        <SeatPair labels={row.slice(0, 2)} taken={taken} selected={selected} onToggle={onToggle} />
+        <SeatPair labels={row.slice(0, 2)} taken={taken} selected={selected} blocked={blocked} onToggle={onToggle} />
         <SeatButton
           label={row[2]}
-          state={seatState(row[2], taken, selected)}
+          state={seatState(row[2], taken, selected, blocked)}
           onToggle={onToggle}
         />
-        <SeatPair labels={row.slice(3)} taken={taken} selected={selected} onToggle={onToggle} />
+        <SeatPair labels={row.slice(3)} taken={taken} selected={selected} blocked={blocked} onToggle={onToggle} />
       </div>
     );
   }
   if (row.length === 4) {
-    // Standard row: pair | aisle | pair.
     return (
       <div className="flex items-center justify-center gap-2">
-        <SeatPair labels={row.slice(0, 2)} taken={taken} selected={selected} onToggle={onToggle} />
+        <SeatPair labels={row.slice(0, 2)} taken={taken} selected={selected} blocked={blocked} onToggle={onToggle} />
         <span className="w-6" aria-hidden="true" />
-        <SeatPair labels={row.slice(2)} taken={taken} selected={selected} onToggle={onToggle} />
+        <SeatPair labels={row.slice(2)} taken={taken} selected={selected} blocked={blocked} onToggle={onToggle} />
       </div>
     );
   }
-  // Short last row (or 2+1 layout): center the seats.
   return (
     <div className="flex items-center justify-center gap-2">
-      <SeatPair labels={row} taken={taken} selected={selected} onToggle={onToggle} />
+      <SeatPair labels={row} taken={taken} selected={selected} blocked={blocked} onToggle={onToggle} />
     </div>
   );
 }
 
-export default function SeatMap({ total = 0, layout = '2x2', taken = [], selected = [], onToggle }) {
+export default function SeatMap({ total = 0, layout = '2x2', taken = [], selected = [], blocked = [], onToggle }) {
   const rows = seatRows(total, layout);
 
   return (
@@ -81,6 +80,11 @@ export default function SeatMap({ total = 0, layout = '2x2', taken = [], selecte
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded bg-muted" /> Taken
         </span>
+        {blocked.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded bg-destructive/30" /> Blocked
+          </span>
+        )}
       </div>
 
       <div className="mx-auto w-full max-w-[300px]">
@@ -89,7 +93,14 @@ export default function SeatMap({ total = 0, layout = '2x2', taken = [], selecte
         </div>
         <div className="space-y-2">
           {rows.map((row, index) => (
-            <SeatRow key={index} row={row} taken={taken} selected={selected} onToggle={onToggle} />
+            <SeatRow
+              key={index}
+              row={row}
+              taken={taken}
+              selected={selected}
+              blocked={blocked}
+              onToggle={onToggle}
+            />
           ))}
         </div>
       </div>

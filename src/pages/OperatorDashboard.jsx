@@ -1,7 +1,7 @@
 import db from '@/api/client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart3, BusFront, CalendarClock, LayoutDashboard, ScanLine, Settings, Tag, Ticket, UsersRound, Wallet } from 'lucide-react';
+import { Armchair, BarChart3, BusFront, CalendarClock, LayoutDashboard, ScanLine, Settings, Tag, Ticket, UsersRound, Wallet } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -14,6 +14,7 @@ import OperatorEarningsTab from '@/components/operator/OperatorEarningsTab';
 import OperatorFleetTab from '@/components/operator/OperatorFleetTab';
 import OperatorOverviewTab from '@/components/operator/OperatorOverviewTab';
 import OperatorReportsTab from '@/components/operator/OperatorReportsTab';
+import OperatorSeatsTab from '@/components/operator/OperatorSeatsTab';
 import OperatorTimetableTab from '@/components/operator/OperatorTimetableTab';
 import OperatorValidationTab from '@/components/operator/OperatorValidationTab';
 import { Card } from '@/components/ui/card';
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'timetable', label: 'Timetable & fares', icon: CalendarClock },
   { id: 'fleet', label: 'Fleet', icon: BusFront },
+  { id: 'seats', label: 'Seat control', icon: Armchair },
   { id: 'bookings', label: 'Booked tickets', icon: Ticket },
   { id: 'validation', label: 'Ticket validation', icon: ScanLine },
   { id: 'earnings', label: 'Earnings', icon: Wallet },
@@ -113,6 +115,8 @@ export default function OperatorDashboard() {
         return <OperatorOverviewTab operator={operator} routes={state.routes} onNavigate={setActive} />;
       case 'fleet':
         return <OperatorFleetTab operator={operator} />;
+      case 'seats':
+        return <OperatorSeatsTab operator={operator} routes={state.routes} />;
       case 'bookings':
         return <OperatorBookingsTab operator={operator} />;
       case 'validation':

@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import FormField from '@/components/manage/FormField';
+import ImageField from '@/components/admin/ImageField';
 import { formatDuration, formatMoney } from '@/lib/format';
 import { IMAGES } from '@/lib/images';
 
@@ -289,12 +290,12 @@ export default function AdminRoutesTab({ routes, cities, onChanged }) {
             />
           </FormField>
 
-          <FormField label="Photo URL" hint="Leave empty to use the standard coach photo.">
-            <Input
-              value={form.image_url}
-              onChange={(event) => setForm({ ...form, image_url: event.target.value })}
-            />
-          </FormField>
+          <ImageField
+            label="Route photo"
+            hint="Upload or pick a photo. Leave empty to use the standard coach photo."
+            value={form.image_url}
+            onChange={(imageUrl) => setForm({ ...form, image_url: imageUrl })}
+          />
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditing(null)}>

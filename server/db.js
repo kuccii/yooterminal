@@ -338,6 +338,19 @@ const APP_TABLES = {
       read INTEGER NOT NULL DEFAULT 0,
       created_date TEXT
     )`,
+  blocked_seat: `
+    CREATE TABLE IF NOT EXISTS blocked_seat (
+      id TEXT PRIMARY KEY,
+      trip_key TEXT NOT NULL,
+      travel_date TEXT NOT NULL,
+      route_slug TEXT,
+      operator_slug TEXT,
+      departure_time TEXT,
+      seat_label TEXT NOT NULL,
+      note TEXT,
+      created_date TEXT,
+      created_by_id TEXT
+    )`,
   notification_outbox: `
     CREATE TABLE IF NOT EXISTS notification_outbox (
       id TEXT PRIMARY KEY,
@@ -372,6 +385,7 @@ CREATE INDEX IF NOT EXISTS idx_operator_slug ON operator(slug);
 CREATE INDEX IF NOT EXISTS idx_notification_user ON notification(user_id, read);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_dedupe ON notification_outbox(dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_outbox_due ON notification_outbox(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_blocked_seat_trip ON blocked_seat(trip_key, travel_date);
 `);
 
 const { runMigrations } = await import('./migrations.js');

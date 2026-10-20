@@ -38,6 +38,13 @@ function collectSeats(rows) {
   return taken;
 }
 
+export function blockedSeatLabels(tripKey, travelDate) {
+  const rows = sqlite
+    .prepare('SELECT seat_label FROM blocked_seat WHERE trip_key = ? AND travel_date = ?')
+    .all(tripKey, travelDate);
+  return rows.map((row) => String(row.seat_label));
+}
+
 export function takenSeatLabels(tripKey, travelDate, now = Date.now()) {
   sweepExpiredHolds(tripKey, travelDate, now);
   const holds = sqlite
@@ -50,7 +57,9 @@ export function takenSeatLabels(tripKey, travelDate, now = Date.now()) {
   const paid = sqlite
     .prepare("SELECT seats FROM booking WHERE trip_key = ? AND travel_date = ? AND status = 'paid'")
     .all(tripKey, travelDate);
-  return collectSeats([...holds, ...paid]);
+  const taken = collectSeats([...holds, ...paid]);
+  for (const label of blockedSeatLabels(tripKey, travelDate)) taken.add(label);
+  return taken;
 }
 
 export const HOLD_TTL_MS = 10 * 60 * 1000;

@@ -87,6 +87,15 @@ export function seatsLeft(trip, heldMap) {
   return Math.max(total - taken, 0);
 }
 
+export function withBlockedSeats(map, records) {
+  const next = { ...map };
+  (records || []).forEach((record) => {
+    if (!record?.trip_key || record.seat_label === undefined || record.seat_label === null) return;
+    next[record.trip_key] = (next[record.trip_key] || []).concat(String(record.seat_label));
+  });
+  return next;
+}
+
 export const TIME_WINDOWS = [
   { id: 'early', label: 'Before 06:00', from: '00:00', to: '06:00' },
   { id: 'morning', label: '06:00 – 12:00', from: '06:00', to: '12:00' },

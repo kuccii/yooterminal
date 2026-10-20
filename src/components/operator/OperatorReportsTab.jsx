@@ -7,6 +7,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 
 import { Button } from '@/components/ui/button';
 import ReportDrilldown, { StatusPill, routeLabel, seatsLabel } from '@/components/ReportDrilldown';
+import PassengerReport from '@/components/PassengerReport';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -147,6 +148,11 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
   });
 
   const needsCustomDates = period === 'custom' && !custom.from;
+  const passengerQuery = (() => {
+    const query = baseQuery(operator.slug, period, custom);
+    delete query.status;
+    return query;
+  })();
 
   useEffect(() => {
     let active = true;
@@ -520,6 +526,12 @@ export default function OperatorReportsTab({ operator, routes = [] }) {
               )}
             </Card>
           </div>
+
+          <PassengerReport
+            query={passengerQuery}
+            routes={routes}
+            csvName={`passengers-${operator.slug}-${period}`}
+          />
 
           {drill === 'revenue' && (
             <ReportDrilldown

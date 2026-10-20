@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { buildTrip, buildTrips, heldSeatsByTrip, seatsLeft, SORT_OPTIONS, TIME_WINDOWS } from '@/lib/trips';
+import { buildTrip, buildTrips, heldSeatsByTrip, seatsLeft, SORT_OPTIONS, TIME_WINDOWS, withBlockedSeats } from '@/lib/trips';
 import { formatDateFull, formatDateShort, formatMoney, shiftDays, todayISO } from '@/lib/format';
 
 const EMPTY_FILTERS = { windows: [], operators: [], classes: [], maxPrice: null };
@@ -113,11 +113,17 @@ export default function SearchResults() {
       const keys = list.map((trip) => trip.key);
       const slugs = [...new Set(list.map((trip) => trip.schedule.operator_slug))];
 
-      const [heldPage, operatorPage] = await Promise.all([
+      const [heldPage, blockedPage, operatorPage] = await Promise.all([
         keys.length
           ? db.entities.DepartureSeat.filter(
               { trip_key: { $in: keys } },
               { limit: 500, fields: ['trip_key', 'seats'] }
+            )
+          : Promise.resolve({ items: [] }),
+        keys.length
+          ? db.entities.BlockedSeat.filter(
+              { trip_key: { $in: keys } },
+              { limit: 500, fields: ['trip_key', 'seat_label'] }
             )
           : Promise.resolve({ items: [] }),
         slugs.length
@@ -127,7 +133,7 @@ export default function SearchResults() {
       if (!active) return;
 
       setTrips(list);
-      setHeld(heldSeatsByTrip(heldPage.items || []));
+      setHeld(withBlockedSeats(heldSeatsByTrip(heldPage.items || []), blockedPage.items));
       setOperatorMap(Object.fromEntries((operatorPage.items || []).map((item) => [item.slug, item])));
       setLoading(false);
     })();
@@ -185,9 +191,15 @@ export default function SearchResults() {
       const keys = list.map((trip) => trip.key);
       const slugs = [...new Set(list.map((trip) => trip.schedule.operator_slug))];
 
-      const [heldPage, operatorPage] = await Promise.all([
+      const [heldPage, blockedPage, operatorPage] = await Promise.all([
         keys.length
           ? db.entities.DepartureSeat.filter({ trip_key: { $in: keys } }, { limit: 500, fields: ['trip_key', 'seats'] })
+          : Promise.resolve({ items: [] }),
+        keys.length
+          ? db.entities.BlockedSeat.filter(
+              { trip_key: { $in: keys } },
+              { limit: 500, fields: ['trip_key', 'seat_label'] }
+            )
           : Promise.resolve({ items: [] }),
         slugs.length
           ? db.entities.Operator.filter({ slug: { $in: slugs } }, { limit: 50 })
@@ -202,7 +214,7 @@ export default function SearchResults() {
       setReturnData({
         route: reverseRoute,
         trips: list,
-        held: heldSeatsByTrip(heldPage.items || []),
+        held: withBlockedSeats(heldSeatsByTrip(heldPage.items || []), blockedPage.items),
       });
     })();
 

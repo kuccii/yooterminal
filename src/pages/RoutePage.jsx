@@ -10,7 +10,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge';
 import { Image } from '@/components/ui/image';
 import { Skeleton } from '@/components/ui/skeleton';
-import { buildTrips, heldSeatsByTrip, seatsLeft } from '@/lib/trips';
+import { buildTrips, heldSeatsByTrip, seatsLeft, withBlockedSeats } from '@/lib/trips';
 import { formatDuration, formatMoney, todayISO } from '@/lib/format';
 import { IMAGES } from '@/lib/images';
 
@@ -50,9 +50,15 @@ export default function RoutePage() {
       const keys = trips.map((trip) => trip.key);
       const slugs = [...new Set(trips.map((trip) => trip.schedule.operator_slug))];
 
-      const [heldPage, operatorPage] = await Promise.all([
+      const [heldPage, blockedPage, operatorPage] = await Promise.all([
         keys.length
           ? db.entities.DepartureSeat.filter({ trip_key: { $in: keys } }, { limit: 500, fields: ['trip_key', 'seats'] })
+          : Promise.resolve({ items: [] }),
+        keys.length
+          ? db.entities.BlockedSeat.filter(
+              { trip_key: { $in: keys } },
+              { limit: 500, fields: ['trip_key', 'seat_label'] }
+            )
           : Promise.resolve({ items: [] }),
         slugs.length
           ? db.entities.Operator.filter({ slug: { $in: slugs } }, { limit: 50 })
@@ -64,7 +70,7 @@ export default function RoutePage() {
         loading: false,
         route,
         trips,
-        held: heldSeatsByTrip(heldPage.items || []),
+        held: withBlockedSeats(heldSeatsByTrip(heldPage.items || []), blockedPage.items),
         operators: Object.fromEntries((operatorPage.items || []).map((operator) => [operator.slug, operator])),
         otherRoutes: (otherPage.items || []).filter((item) => item.slug !== slug),
       });

@@ -6,16 +6,22 @@ import { ArrowRight, MapPin } from 'lucide-react';
 
 import OperatorAvatar from '@/components/OperatorAvatar';
 import Stars from '@/components/Stars';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { useSiteContent } from '@/lib/SiteContentContext';
+import { useAutoSlide } from '@/lib/useAutoSlide';
 
 export default function OperatorsSection() {
   const { content } = useSiteContent();
   const [operators, setOperators] = useState([]);
+  const [api, setApi] = useState(null);
+  const [paused, setPaused] = useState(false);
+
+  useAutoSlide(api, { delay: 5000, paused });
 
   useEffect(() => {
     let active = true;
     db.entities.Operator
-      .filter({ status: 'approved' }, { sort: '-rating', limit: 8 })
+      .filter({ status: 'approved' }, { sort: '-rating', limit: 12 })
       .then((page) => {
         if (active) setOperators(page.items || []);
       })
@@ -35,36 +41,55 @@ export default function OperatorsSection() {
           Operator dashboard
         </Link>
       </div>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {operators.map((operator) => (
-          <Link
-            key={operator.slug}
-            to={`/operator/${operator.slug}`}
-            className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <div className="flex items-center gap-3">
-              <OperatorAvatar name={operator.name} color={operator.brand_color} />
-              <div className="min-w-0">
-                <p className="truncate font-display text-base font-bold">{operator.name}</p>
-                <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <MapPin className="h-3 w-3" /> {operator.country}
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <Stars rating={operator.rating} />
-              <span className="text-xs text-muted-foreground">
-                {Number(operator.rating || 0).toFixed(1)} · {operator.review_count || 0} reviews
-              </span>
-            </div>
-            {operator.description && (
-              <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{operator.description}</p>
-            )}
-            <span className="mt-4 flex items-center gap-1 text-sm font-semibold text-primary">
-              View profile <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
-            </span>
-          </Link>
-        ))}
+
+      <div
+        className="mt-8"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocusCapture={() => setPaused(true)}
+        onBlurCapture={() => setPaused(false)}
+      >
+        <Carousel
+          setApi={setApi}
+          opts={{ loop: true, align: 'start' }}
+          className="px-1"
+          aria-label="Bus companies on the network"
+        >
+          <CarouselContent>
+            {operators.map((operator) => (
+              <CarouselItem key={operator.slug} className="sm:basis-1/2 lg:basis-1/4">
+                <Link
+                  to={`/operator/${operator.slug}`}
+                  className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <OperatorAvatar name={operator.name} color={operator.brand_color} />
+                    <div className="min-w-0">
+                      <p className="truncate font-display text-base font-bold">{operator.name}</p>
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3" /> {operator.country}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Stars rating={operator.rating} />
+                    <span className="text-xs text-muted-foreground">
+                      {Number(operator.rating || 0).toFixed(1)} · {operator.review_count || 0} reviews
+                    </span>
+                  </div>
+                  {operator.description && (
+                    <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{operator.description}</p>
+                  )}
+                  <span className="mt-auto flex items-center gap-1 pt-4 text-sm font-semibold text-primary">
+                    View profile <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                  </span>
+                </Link>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          <CarouselPrevious className="-left-3 hidden md:flex" />
+          <CarouselNext className="-right-3 hidden md:flex" />
+        </Carousel>
       </div>
     </section>
   );

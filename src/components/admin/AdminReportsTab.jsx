@@ -5,6 +5,7 @@ import { BadgeDollarSign, Bus, Percent, Ticket, TrendingUp } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import ReportDrilldown, { StatusPill, routeLabel, seatsLabel } from '@/components/ReportDrilldown';
+import PassengerReport from '@/components/PassengerReport';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,7 +24,10 @@ const BOOKING_FIELDS = [
   'destination_city',
   'operator_name',
   'seats',
+  'passengers',
   'passenger_count',
+  'contact_name',
+  'contact_phone',
   'amount',
   'currency',
   'platform_fee',
@@ -375,6 +379,8 @@ export default function AdminReportsTab({ operators, routes }) {
           </div>
         </Card>
       </div>
+
+      <PassengerReport query={{}} routes={routes} showOperator csvName="admin-passenger-report" />
 
       {drill === 'tickets' && (
         <ReportDrilldown

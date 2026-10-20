@@ -62,12 +62,9 @@ export default function TripDetail() {
         return;
       }
 
-      const [routePage, heldPage] = await Promise.all([
+      const [routePage, takenPage] = await Promise.all([
         db.entities.Route.filter({ slug: parsed.route_slug }, { limit: 1 }),
-        db.entities.DepartureSeat.filter(
-          { trip_key: tripKey },
-          { limit: 200, fields: ['seats', 'expires_at'] }
-        ),
+        db.seats.taken(tripKey, parsed.travel_date),
       ]);
       const route = routePage.items?.[0] || null;
 
@@ -86,9 +83,7 @@ export default function TripDetail() {
         schedule,
         route,
         cities,
-        taken: (heldPage.items || [])
-          .filter((item) => !item.expires_at || Number(item.expires_at) > Date.now())
-          .flatMap((record) => record.seats || []),
+        taken: Array.isArray(takenPage?.seats) ? takenPage.seats.map(String) : [],
       });
     })();
 
