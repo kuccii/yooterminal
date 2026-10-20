@@ -238,7 +238,7 @@ async function seed() {
   ensureUser({ email: 'operator@example.com', name: 'Savannah Ops', role: 'operator' });
   ensureUser({ email: 'kigali.ops@example.com', name: 'Kigali Ops', role: 'operator' });
 
-  for (const table of ['departure_seat', 'booking', 'coupon', 'review', 'banner', 'schedule', 'bus', 'route', 'operator', 'city', 'platform_setting', 'site_content', 'site_faq', 'site_feature']) {
+  for (const table of ['departure_seat', 'blocked_seat', 'booking', 'coupon', 'review', 'banner', 'schedule', 'bus', 'route', 'operator', 'city', 'platform_setting', 'site_content', 'site_faq', 'site_feature']) {
     clearTable(table);
   }
 

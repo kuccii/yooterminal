@@ -7,11 +7,8 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { todayISO } from '@/lib/format';
 import { tripKeyOf } from '@/lib/trips';
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export default function OperatorSeatsTab({ operator, routes = [] }) {
   const [travelDate, setTravelDate] = useState(todayISO);

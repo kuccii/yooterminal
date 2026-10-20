@@ -138,6 +138,9 @@ export function createSeatsRouter() {
     const tripKey = String(body.trip_key || '');
     const parts = tripParts(tripKey, body.travel_date);
     if (!tripKey || !parts.travel_date || !parts.operator_slug) throw new HttpError(400, 'Invalid trip');
+    if (parts.travel_date !== parseTripKey(tripKey).travel_date) {
+      throw new HttpError(400, 'Travel date must match the trip');
+    }
     assertOperatorAccess(caller, parts.operator_slug);
 
     const seatLabel = String(body.seat_label || '').trim();
