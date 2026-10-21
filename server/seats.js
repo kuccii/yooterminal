@@ -116,7 +116,11 @@ export function createSeatsRouter() {
     const tripKey = String(req.query.trip_key || '');
     const { travel_date } = tripParts(tripKey, req.query.travel_date);
     if (!tripKey || !travel_date) throw new HttpError(400, 'Invalid trip');
-    res.json({ seats: [...takenSeatLabels(tripKey, travel_date)].sort((a, b) => Number(a) - Number(b)) });
+    const byNumber = (a, b) => Number(a) - Number(b);
+    res.json({
+      seats: [...takenSeatLabels(tripKey, travel_date)].sort(byNumber),
+      blocked: [...blockedSeatLabels(tripKey, travel_date)].sort(byNumber),
+    });
   });
 
   router.get('/blocked', async (req, res) => {

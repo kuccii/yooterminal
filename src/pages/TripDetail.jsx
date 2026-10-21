@@ -29,7 +29,7 @@ export default function TripDetail() {
 
   const parsed = useMemo(() => parseTripKey(tripKey), [tripKey]);
 
-  const [data, setData] = useState({ loading: true, schedule: null, route: null, cities: {}, taken: [] });
+  const [data, setData] = useState({ loading: true, schedule: null, route: null, cities: {}, taken: [], blocked: [] });
   const [selected, setSelected] = useState([]);
   const [passengers, setPassengers] = useState({});
   const [contact, setContact] = useState({ name: '', email: '', phone: '' });
@@ -61,7 +61,7 @@ export default function TripDetail() {
       );
       const schedule = schedulePage.items?.[0] || null;
       if (!schedule) {
-        if (active) setData({ loading: false, schedule: null, route: null, cities: {}, taken: [] });
+        if (active) setData({ loading: false, schedule: null, route: null, cities: {}, taken: [], blocked: [] });
         return;
       }
 
@@ -87,6 +87,7 @@ export default function TripDetail() {
         route,
         cities,
         taken: Array.isArray(takenPage?.seats) ? takenPage.seats.map(String) : [],
+        blocked: Array.isArray(takenPage?.blocked) ? takenPage.blocked.map(String) : [],
       });
     })();
 
@@ -320,7 +321,10 @@ export default function TripDetail() {
   const destinationCity = data.cities[data.route?.destination_slug];
   const total = Number(trip.price) * (selected.length || wanted);
   const activeHoldSeats = holdActive ? hold.seats || [] : [];
-  const displayTaken = data.taken.filter((seat) => !activeHoldSeats.includes(seat));
+  const blockedSeats = data.blocked.filter((seat) => !activeHoldSeats.includes(seat));
+  const displayTaken = data.taken.filter(
+    (seat) => !activeHoldSeats.includes(seat) && !blockedSeats.includes(seat)
+  );
   const holdMinutes = Math.floor(holdRemaining / 60000);
   const holdSeconds = Math.floor((holdRemaining % 60000) / 1000);
 
@@ -362,6 +366,7 @@ export default function TripDetail() {
                 total={schedule.seats_total}
                 layout={schedule.seat_layout || '2x2'}
                 taken={displayTaken}
+                blocked={blockedSeats}
                 selected={selected}
                 onToggle={toggleSeat}
               />

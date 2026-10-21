@@ -12,9 +12,10 @@ function SeatButton({ label, state, onToggle }) {
       className={cn(
         'h-10 w-10 rounded-lg border text-xs font-semibold transition',
         state === 'taken' && 'cursor-not-allowed border-border bg-muted text-muted-foreground/50',
-        state === 'blocked' && 'cursor-pointer border-destructive/40 bg-destructive/10 text-destructive',
+        state === 'blocked' && 'cursor-not-allowed border-destructive/60 bg-destructive/15 text-destructive',
         state === 'selected' && 'border-primary bg-primary text-primary-foreground shadow-sm',
-        state === 'free' && 'border-border bg-card text-foreground hover:border-primary hover:text-primary'
+        state === 'free' &&
+          'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:border-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-300'
       )}
     >
       {label}
@@ -23,9 +24,10 @@ function SeatButton({ label, state, onToggle }) {
 }
 
 function seatState(label, taken, selected, blocked) {
-  if (taken.includes(label)) return 'taken';
-  if (blocked.includes(label)) return 'blocked';
-  if (selected.includes(label)) return 'selected';
+  const key = String(label);
+  if (taken.some((seat) => String(seat) === key)) return 'taken';
+  if (blocked.some((seat) => String(seat) === key)) return 'blocked';
+  if (selected.some((seat) => String(seat) === key)) return 'selected';
   return 'free';
 }
 
@@ -72,7 +74,7 @@ export default function SeatMap({ total = 0, layout = '2x2', taken = [], selecte
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="mb-4 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded border border-border bg-card" /> Available
+          <span className="h-3 w-3 rounded border border-emerald-500/50 bg-emerald-500/10" /> Available
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded bg-primary" /> Your seats
@@ -82,7 +84,7 @@ export default function SeatMap({ total = 0, layout = '2x2', taken = [], selecte
         </span>
         {blocked.length > 0 && (
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded bg-destructive/30" /> Blocked
+            <span className="h-3 w-3 rounded border border-destructive/60 bg-destructive/15" /> Blocked
           </span>
         )}
       </div>
