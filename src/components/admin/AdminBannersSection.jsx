@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import FormField from '@/components/manage/FormField';
+import ImageField from '@/components/admin/ImageField';
 import { IMAGES } from '@/lib/images';
 
 const EMPTY = {
@@ -30,6 +31,7 @@ export default function AdminBannersSection() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     const page = await db.entities.Banner.list({ sort: 'sort_order', limit: 50 });
@@ -42,11 +44,13 @@ export default function AdminBannersSection() {
 
   const openEditor = (banner) => {
     setEditing(banner || {});
+    setError('');
     setForm(banner ? { ...EMPTY, ...banner } : EMPTY);
   };
 
   const save = async () => {
     setBusy(true);
+    setError('');
     const payload = {
       title: form.title.trim(),
       subtitle: form.subtitle.trim(),
@@ -59,14 +63,19 @@ export default function AdminBannersSection() {
       ends_at: form.ends_at || '',
       active: form.active,
     };
-    if (editing?.id) {
-      await db.entities.Banner.update(editing.id, payload);
-    } else {
-      await db.entities.Banner.create(payload);
+    try {
+      if (editing?.id) {
+        await db.entities.Banner.update(editing.id, payload);
+      } else {
+        await db.entities.Banner.create(payload);
+      }
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err?.message || 'Could not save the banner.');
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    setEditing(null);
-    await load();
   };
 
   const toggleActive = async (banner) => {
@@ -138,6 +147,12 @@ export default function AdminBannersSection() {
             <DialogTitle>{editing?.id ? 'Edit banner' : 'New banner'}</DialogTitle>
           </DialogHeader>
 
+          {error && (
+            <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+              {error}
+            </p>
+          )}
+
           <div className="space-y-4">
             <FormField label="Headline">
               <Input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
@@ -145,9 +160,12 @@ export default function AdminBannersSection() {
             <FormField label="Supporting line">
               <Input value={form.subtitle} onChange={(event) => setForm({ ...form, subtitle: event.target.value })} />
             </FormField>
-            <FormField label="Image URL">
-              <Input value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} />
-            </FormField>
+            <ImageField
+              label="Banner image"
+              hint="Upload or pick a photo. Leave empty to hide the image."
+              value={form.image_url}
+              onChange={(value) => setForm({ ...form, image_url: value })}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Button label">
                 <Input

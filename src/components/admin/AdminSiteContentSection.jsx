@@ -93,11 +93,13 @@ export default function AdminSiteContentSection() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(() => buildForm(content));
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [routes, setRoutes] = useState([]);
   const [picker, setPicker] = useState('');
 
   const openEditor = () => {
     setForm(buildForm(content));
+    setError('');
     setPicker('');
     setOpen(true);
     db.entities.Route
@@ -129,6 +131,7 @@ export default function AdminSiteContentSection() {
 
   const save = async () => {
     setBusy(true);
+    setError('');
     const payloadByKey = {};
     for (const key of SCALAR_KEYS) payloadByKey[key] = String(form[key] ?? '').trim();
     payloadByKey.home_routes = form.home_routes.filter((slug) => slug.trim());
@@ -157,6 +160,8 @@ export default function AdminSiteContentSection() {
       }
       await refresh();
       setOpen(false);
+    } catch (err) {
+      setError(err?.message || 'Could not save site content.');
     } finally {
       setBusy(false);
     }
@@ -210,6 +215,12 @@ export default function AdminSiteContentSection() {
           <DialogHeader>
             <DialogTitle>Edit site content</DialogTitle>
           </DialogHeader>
+
+          {error && (
+            <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+              {error}
+            </p>
+          )}
 
           <div className="space-y-5">
             <div className="space-y-4">
@@ -358,7 +369,12 @@ export default function AdminSiteContentSection() {
 
             <div className="space-y-3 border-t border-border pt-4">
               <div className="flex items-center justify-between">
-                <p className="font-display text-sm font-bold">Countries</p>
+                <div>
+                  <p className="font-display text-sm font-bold">Country images</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Used on every place card for that country.
+                  </p>
+                </div>
                 <Button
                   type="button"
                   size="sm"

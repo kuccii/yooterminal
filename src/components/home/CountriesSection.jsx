@@ -69,7 +69,7 @@ export default function CountriesSection() {
                 >
                   <div className="relative h-40 w-full overflow-hidden bg-secondary">
                     <Image
-                      src={city.image_url || countryImages[city.country] || IMAGES.busPark}
+                      src={countryImages[city.country] || city.image_url || IMAGES.busPark}
                       alt={city.name}
                       className="h-40 w-full object-cover transition duration-500 group-hover:scale-105"
                     />
