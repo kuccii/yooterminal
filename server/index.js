@@ -47,6 +47,7 @@ app.get('/api/me', async (req, res) => {
     role: caller.role,
     full_name: caller.name,
     logo_path: caller.logoPath || null,
+    phone: caller.phone || '',
   });
 });
 

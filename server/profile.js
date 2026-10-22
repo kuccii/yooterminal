@@ -5,6 +5,7 @@ import { sqlite } from './db.js';
 import { readImageBody, removeStoredImage, storeImage } from './uploads.js';
 
 const NAME_MAX_LENGTH = 100;
+const PHONE_MAX_LENGTH = 32;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 
@@ -31,6 +32,7 @@ export function createProfileRouter() {
       role: caller.role,
       full_name: caller.name,
       logo_path: caller.logoPath,
+      phone: caller.phone,
     });
   });
 
@@ -38,21 +40,32 @@ export function createProfileRouter() {
     const caller = await getCaller(req);
     if (!caller) throw new HttpError(401, 'Not signed in');
 
-    const fullName = typeof req.body?.full_name === 'string' ? req.body.full_name.trim() : '';
-    if (!fullName) throw new HttpError(400, 'Enter a display name.');
+    const hasName = typeof req.body?.full_name === 'string';
+    const hasPhone = typeof req.body?.phone === 'string';
+    if (!hasName && !hasPhone) throw new HttpError(400, 'Nothing to update.');
+
+    const fullName = hasName ? req.body.full_name.trim() : caller.name;
+    if (hasName && !fullName) throw new HttpError(400, 'Enter a display name.');
     if (fullName.length > NAME_MAX_LENGTH) {
       throw new HttpError(400, `Display name must be at most ${NAME_MAX_LENGTH} characters.`);
     }
 
-    try {
-      await auth.api.updateUser({ body: { name: fullName }, headers: req.headers });
-    } catch {
-      throw new HttpError(500, 'We could not update your profile. Please try again.');
+    const phone = hasPhone ? req.body.phone.trim() : caller.phone;
+    if (phone.length > PHONE_MAX_LENGTH) {
+      throw new HttpError(400, `Phone number must be at most ${PHONE_MAX_LENGTH} characters.`);
+    }
+
+    if (hasName) {
+      try {
+        await auth.api.updateUser({ body: { name: fullName }, headers: req.headers });
+      } catch {
+        throw new HttpError(500, 'We could not update your profile. Please try again.');
+      }
     }
 
     sqlite
-      .prepare('UPDATE app_user SET full_name = ?, updated_date = ? WHERE id = ?')
-      .run(fullName, new Date().toISOString(), caller.id);
+      .prepare('UPDATE app_user SET full_name = ?, phone = ?, updated_date = ? WHERE id = ?')
+      .run(fullName, phone || null, new Date().toISOString(), caller.id);
 
     res.json({
       id: caller.id,
@@ -60,6 +73,7 @@ export function createProfileRouter() {
       role: caller.role,
       full_name: fullName,
       logo_path: caller.logoPath,
+      phone,
     });
   });
 

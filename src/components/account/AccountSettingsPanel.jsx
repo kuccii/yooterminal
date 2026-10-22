@@ -1,7 +1,7 @@
 import db from '@/api/client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Image as ImageIcon, Loader2, Lock, LogOut, Trash2, Upload, User } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Lock, LogOut, Phone, Trash2, Upload, User } from 'lucide-react';
 
 import { useAuth } from '@/lib/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,6 +33,7 @@ export default function AccountSettingsPanel({ className = '' }) {
   const [loading, setLoading] = useState(true);
 
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState('');
   const [nameSaved, setNameSaved] = useState(false);
@@ -56,12 +57,14 @@ export default function AccountSettingsPanel({ className = '' }) {
         if (!active) return;
         setProfile(data);
         setFullName(data?.full_name || '');
+        setPhone(data?.phone || '');
         setLoading(false);
       })
       .catch(() => {
         if (!active) return;
         setProfile(user);
         setFullName(user?.full_name || '');
+        setPhone(user?.phone || '');
         setLoading(false);
       });
     return () => {
@@ -80,10 +83,13 @@ export default function AccountSettingsPanel({ className = '' }) {
     }
     setNameSaving(true);
     try {
-      const updated = await db.profile.update({ fullName: trimmed });
+      const updated = await db.profile.update({ fullName: trimmed, phone: phone.trim() });
       setProfile(updated);
       setFullName(updated.full_name || trimmed);
-      setUser((prev) => (prev ? { ...prev, full_name: updated.full_name || trimmed } : prev));
+      setPhone(updated.phone || '');
+      setUser((prev) =>
+        prev ? { ...prev, full_name: updated.full_name || trimmed, phone: updated.phone || '' } : prev
+      );
       setNameSaved(true);
     } catch (err) {
       setNameError(err.message || 'We could not update your profile. Please try again.');
@@ -221,6 +227,27 @@ export default function AccountSettingsPanel({ className = '' }) {
                 required
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone number</Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+              <Input
+                id="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                maxLength={32}
+                placeholder="+256 700 000 000"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  setNameSaved(false);
+                }}
+                className="pl-10 h-12"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Used to prefill your booking contact details.</p>
           </div>
           {nameError && (
             <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{nameError}</div>

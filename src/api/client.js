@@ -62,6 +62,7 @@ async function currentUser() {
       role: data.role || 'user',
       full_name: data.full_name || '',
       logo_path: data.logo_path || null,
+      phone: data.phone || '',
     };
   } catch {
     return null;
@@ -78,8 +79,11 @@ export const db = {
     async get() {
       return request('/profile');
     },
-    async update({ fullName }) {
-      return request('/profile', { method: 'PATCH', body: JSON.stringify({ full_name: fullName }) });
+    async update({ fullName, phone }) {
+      const body = {};
+      if (fullName !== undefined) body.full_name = fullName;
+      if (phone !== undefined) body.phone = phone;
+      return request('/profile', { method: 'PATCH', body: JSON.stringify(body) });
     },
     async changePassword({ currentPassword, newPassword }) {
       return request('/profile/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });

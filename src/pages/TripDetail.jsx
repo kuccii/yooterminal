@@ -22,7 +22,7 @@ export default function TripDetail() {
   const { tripKey = '' } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const { content } = useSiteContent();
   const roundTrips = content.round_trip_enabled === true;
   const wanted = Number(params.get('passengers') || 1);
@@ -33,6 +33,7 @@ export default function TripDetail() {
   const [selected, setSelected] = useState([]);
   const [passengers, setPassengers] = useState({});
   const [contact, setContact] = useState({ name: '', email: '', phone: '' });
+  const [savePhone, setSavePhone] = useState(false);
   const [error, setError] = useState('');
   const [hold, setHold] = useState(null);
   const [holdBusy, setHoldBusy] = useState(false);
@@ -41,6 +42,20 @@ export default function TripDetail() {
   const [now, setNow] = useState(() => Date.now());
   const holdSeq = useRef(0);
   const holdRef = useRef(null);
+  const prefilledUser = useRef('');
+
+  useEffect(() => {
+    if (!user?.id || prefilledUser.current === user.id) return;
+    prefilledUser.current = user.id;
+    const localPart = String(user.email || '').split('@')[0].trim().toLowerCase();
+    const profileName = String(user.full_name || '').trim();
+    const safeName = profileName && profileName.toLowerCase() !== localPart ? profileName : '';
+    setContact((previous) => ({
+      name: previous.name || safeName,
+      email: previous.email || user.email || '',
+      phone: previous.phone || user.phone || '',
+    }));
+  }, [user?.id, user?.email, user?.full_name, user?.phone]);
 
   useEffect(() => {
     let active = true;
@@ -204,6 +219,13 @@ export default function TripDetail() {
     if (!user?.id) {
       setError('Sign in to hold your seats and continue to payment.');
       return;
+    }
+    if (savePhone) {
+      const phone = contact.phone.trim();
+      const updated = await db.profile.update({ phone }).catch(() => null);
+      if (updated) {
+        setUser((previous) => (previous ? { ...previous, phone: updated.phone || phone } : previous));
+      }
     }
     setError('');
     setOutboundMissing(false);
@@ -392,6 +414,7 @@ export default function TripDetail() {
                 </Label>
                 <Input
                   id="contact-name"
+                  autoComplete="name"
                   className="mt-1"
                   value={contact.name}
                   onChange={(event) => setContact({ ...contact, name: event.target.value })}
@@ -404,6 +427,7 @@ export default function TripDetail() {
                 <Input
                   id="contact-email"
                   type="email"
+                  autoComplete="email"
                   className="mt-1"
                   value={contact.email}
                   onChange={(event) => setContact({ ...contact, email: event.target.value })}
@@ -415,12 +439,29 @@ export default function TripDetail() {
                 </Label>
                 <Input
                   id="contact-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   className="mt-1"
                   value={contact.phone}
-                  onChange={(event) => setContact({ ...contact, phone: event.target.value })}
+                  onChange={(event) => {
+                    setContact({ ...contact, phone: event.target.value });
+                    setSavePhone(false);
+                  }}
                 />
               </div>
             </div>
+            {user?.id && contact.phone.trim() && contact.phone.trim() !== (user.phone || '').trim() && (
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={savePhone}
+                  onChange={(event) => setSavePhone(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                />
+                <span>Save this number to my account for next time.</span>
+              </label>
+            )}
           </Card>
 
           <Card className="rounded-2xl border-border p-5 shadow-sm">

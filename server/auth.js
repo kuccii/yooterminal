@@ -59,7 +59,7 @@ function upsertAppUser({ authId, email, fullName }) {
   const now = new Date().toISOString();
   const normalizedEmail = String(email || '').toLowerCase();
   const existing = sqlite
-    .prepare('SELECT id, role, full_name, logo_path FROM app_user WHERE email = ?')
+    .prepare('SELECT id, role, full_name, logo_path, phone FROM app_user WHERE email = ?')
     .get(normalizedEmail);
   if (existing) {
     const nextName = fullName || existing.full_name || '';
@@ -74,6 +74,7 @@ function upsertAppUser({ authId, email, fullName }) {
       role: existing.role,
       name: nextName,
       logoPath: existing.logo_path || null,
+      phone: existing.phone || '',
     };
   }
   const result = sqlite
@@ -85,6 +86,7 @@ function upsertAppUser({ authId, email, fullName }) {
     role: 'user',
     name: fullName || '',
     logoPath: null,
+    phone: '',
   };
 }
 
