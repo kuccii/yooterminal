@@ -5,12 +5,14 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Image } from '@/components/ui/image';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import FormField from '@/components/manage/FormField';
 import ImageField from '@/components/admin/ImageField';
+import { IMAGES } from '@/lib/images';
 import { useSiteContent } from '@/lib/SiteContentContext';
 
 const SCALAR_KEYS = [
@@ -95,12 +97,17 @@ export default function AdminSiteContentSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [routes, setRoutes] = useState([]);
+  const [routeImages, setRouteImages] = useState({});
+  const [imageEditor, setImageEditor] = useState('');
   const [picker, setPicker] = useState('');
 
   const openEditor = () => {
     setForm(buildForm(content));
     setError('');
     setPicker('');
+    setRoutes([]);
+    setRouteImages({});
+    setImageEditor('');
     setOpen(true);
     db.entities.Route
       .list({ sort: 'origin_city', limit: 200 })
@@ -111,6 +118,12 @@ export default function AdminSiteContentSection() {
   const routeLabel = (slug) => {
     const route = routes.find((item) => item.slug === slug);
     return route ? `${route.origin_city} → ${route.destination_city}` : slug;
+  };
+
+  const routeImage = (slug) => {
+    if (Object.prototype.hasOwnProperty.call(routeImages, slug)) return routeImages[slug];
+    const route = routes.find((item) => item.slug === slug);
+    return route?.image_url || '';
   };
 
   const moveRoute = (index, delta) => {
@@ -158,10 +171,22 @@ export default function AdminSiteContentSection() {
           await db.entities.SiteContent.create({ key, value });
         }
       }
+      const changedRoutes = form.home_routes
+        .map((slug) => routes.find((route) => route.slug === slug))
+        .filter(Boolean)
+        .map((route) => ({ route, image: String(routeImages[route.slug] ?? '').trim() }))
+        .filter(
+          ({ route, image }) =>
+            Object.prototype.hasOwnProperty.call(routeImages, route.slug) &&
+            image !== String(route.image_url || '').trim()
+        );
+      await Promise.all(
+        changedRoutes.map(({ route, image }) => db.entities.Route.update(route.id, { image_url: image }))
+      );
       await refresh();
       setOpen(false);
     } catch (err) {
-      setError(err?.message || 'Could not save site content.');
+      setError(err?.message || 'Could not save site content or route photos.');
     } finally {
       setBusy(false);
     }
@@ -317,37 +342,68 @@ export default function AdminSiteContentSection() {
                   marked popular.
                 </p>
               </div>
-              {form.home_routes.map((slug, index) => (
-                <div key={slug} className="flex items-center gap-2 rounded-xl border border-border p-2">
-                  <span className="flex-1 truncate text-sm font-medium">{routeLabel(slug)}</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={index === 0}
-                    onClick={() => moveRoute(index, -1)}
-                  >
-                    Up
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={index === form.home_routes.length - 1}
-                    onClick={() => moveRoute(index, 1)}
-                  >
-                    Down
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setValue('home_routes', form.home_routes.filter((item) => item !== slug))}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
+              {form.home_routes.map((slug, index) => {
+                const image = routeImage(slug);
+                return (
+                  <div key={slug} className="rounded-xl border border-border p-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setImageEditor(imageEditor === slug ? '' : slug)}
+                        className="h-10 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary"
+                        aria-label={`Edit photo for ${routeLabel(slug)}`}
+                      >
+                        <Image src={image || IMAGES.busRoad} alt="" className="h-10 w-14 object-cover" />
+                      </button>
+                      <span className="flex-1 truncate text-sm font-medium">{routeLabel(slug)}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setImageEditor(imageEditor === slug ? '' : slug)}
+                      >
+                        {imageEditor === slug ? 'Close photo' : 'Photo'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === 0}
+                        onClick={() => moveRoute(index, -1)}
+                      >
+                        Up
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === form.home_routes.length - 1}
+                        onClick={() => moveRoute(index, 1)}
+                      >
+                        Down
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setValue('home_routes', form.home_routes.filter((item) => item !== slug))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    {imageEditor === slug && (
+                      <div className="mt-3 border-t border-border pt-3">
+                        <ImageField
+                          label="Route photo"
+                          hint="Shown on the home page route card. Leave empty to use the standard coach photo."
+                          value={image}
+                          onChange={(value) => setRouteImages((previous) => ({ ...previous, [slug]: value }))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {!form.home_routes.length && (
                 <p className="text-sm text-muted-foreground">No routes picked — showing popular routes.</p>
               )}
