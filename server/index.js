@@ -12,6 +12,7 @@ import { createSeatsRouter } from './seats.js';
 import { createProfileRouter } from './profile.js';
 import { createSiteContentRouter } from './siteContent.js';
 import { createNotificationsRouter } from './notify.js';
+import { createPosRouter } from './pos.js';
 import { UPLOADS_DIR } from './uploads.js';
 import { sweepExpiredHolds } from './booking.js';
 import { runRefundQueue } from './payments.js';
@@ -89,6 +90,10 @@ app.use(
 app.use('/uploads', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
+
+// Operator APK download. Mounted before the SPA fallback: the V1's browser must
+// get a plain HTML page and a real file, never the React bundle.
+app.use('/pos', createPosRouter());
 
 // Production build, if present.
 const dist = path.join(__dirname, '..', 'dist');

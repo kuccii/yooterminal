@@ -52,14 +52,15 @@ Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in the **process environment**
 
 ## Scripts
 
-| Command         | What it does                                        |
-| --------------- | --------------------------------------------------- |
-| `npm run dev`   | API + frontend dev servers together                 |
-| `npm run seed`  | (Re)create demo data in `server/data/app.db`        |
-| `npm run build` | Production frontend build into `dist/`              |
-| `npm start`     | Serve the API **and** `dist/` (production)          |
-| `npm run lint`  | ESLint                                              |
-| `npm run typecheck` | `tsc` over the checked JSX subset                |
+| Command               | What it does                                        |
+| --------------------- | --------------------------------------------------- |
+| `npm run dev`         | API + frontend dev servers together                 |
+| `npm run seed`        | (Re)create demo data in `server/data/app.db`        |
+| `npm run build`       | Production frontend build into `dist/`              |
+| `npm start`           | Serve the API **and** `dist/` (production)          |
+| `npm run pos:publish` | Copy the built POS APK into `server/pos/`           |
+| `npm run lint`        | ESLint                                              |
+| `npm run typecheck`   | `tsc` over the checked JSX subset                   |
 
 ## Production
 
@@ -85,6 +86,44 @@ load `.env` files, and a missing `BETTER_AUTH_SECRET` is a startup error):
 - `SMTP_PASS` — SMTP password
 - `SMTP_FROM` — From address (defaults to `SMTP_USER`)
 
+## POS app (Sunmi V1)
+
+The operator till is a native Android app in `pos-android/` (`com.yooterminal.pos`,
+minSdk 23). It is **not** part of the web build: the V1 runs Android 6 and cannot
+load the React app.
+
+The APK is served from the same Express process at **`/pos`** — plain HTML with
+no JavaScript, so an old WebView can open it:
+
+| URL                        | Purpose                                  |
+| -------------------------- | ---------------------------------------- |
+| `/pos`                     | Install page with the download button    |
+| `/pos/yooterminal-pos.apk` | The signed APK itself                    |
+| `/pos/version`             | JSON: version, size, sha256, build time  |
+
+Publishing a new build:
+
+```bash
+cd pos-android && gradlew.bat :app:assembleRelease && cd ..
+npm run pos:publish      # copies the APK into server/pos/ + writes manifest.json
+```
+
+`server/pos/` is committed on purpose: deployment here is `git pull` + `npm start`,
+so a committed APK is what makes the link work without any CI or upload step.
+
+**Android 6 TLS caveat.** The live certificate chain is
+`YE1 → Root YE → ISRG Root X2 → ISRG Root X1`, and Android 6 does not trust
+`ISRG Root X1`. The V1's browser may refuse `https://…/pos` with a certificate
+warning before it can download anything. The app itself handles this (it can
+bundle the root), but the *first download* cannot. Workarounds, in order of
+preference:
+
+1. Reissue the site certificate from a CA whose root Android 6 trusts
+   (DigiCert/Sectigo; ZeroSSL issues from a compatible root).
+2. Tap **Advanced → Proceed** in the browser, if the V1's browser offers it.
+3. Sideload over USB: `adb install -r server/pos/yooterminal-pos.apk`.
+4. Serve the APK once over plain HTTP on the LAN and install from there.
+
 ## Backend layout
 
 ```
@@ -96,6 +135,8 @@ server/
   booking.js       Trip quoting, seat availability, coupon rules
   notifications.js Transactional emails (confirmation, cancellation, reminder)
   entities.js      Entity registry + filter/sort/aggregate engine + access rules
+  pos.js           Operator APK download page (/pos) — no JavaScript
+  pos/             Published POS APK + manifest.json (committed)
   db.js            SQLite connection + schema (auth tables + app tables)
   seed.js          Demo dataset + seeded users
   data/            app.db lives here (gitignored)
