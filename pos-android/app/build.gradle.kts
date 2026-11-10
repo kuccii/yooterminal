@@ -15,7 +15,10 @@ android {
         versionName = "1.0.0-spike"
     }
 
-    buildFeatures { viewBinding = true }
+    buildFeatures {
+        viewBinding = true
+        aidl = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

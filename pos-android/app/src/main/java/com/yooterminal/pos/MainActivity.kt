@@ -7,20 +7,33 @@ import com.yooterminal.pos.databinding.ActivityMainBinding
 import com.yooterminal.pos.net.TlsProbe
 import com.yooterminal.pos.net.TlsResult
 import com.yooterminal.pos.net.TrustMode
+import com.yooterminal.pos.printer.SunmiPrinter
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var printer: SunmiPrinter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        printer = SunmiPrinter(applicationContext)
 
         binding.checkTlsButton.setOnClickListener { checkTls() }
-        binding.checkPrinterButton.setOnClickListener { appendLine("printer: not implemented yet") }
+        binding.checkPrinterButton.setOnClickListener { checkPrinter() }
         binding.printTicketButton.setOnClickListener { appendLine("print: not implemented yet") }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        printer.bind()
+    }
+
+    override fun onStop() {
+        printer.unbind()
+        super.onStop()
     }
 
     private fun checkTls() {
@@ -40,6 +53,15 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             binding.checkTlsButton.isEnabled = true
+        }
+    }
+
+    private fun checkPrinter() {
+        lifecycleScope.launch {
+            val version = printer.serviceVersion()
+            appendLine("service version: ${version ?: "not bound"}")
+            appendLine("printer status: ${printer.status()}")
+            appendLine("last broadcast: ${printer.lastBroadcastAction() ?: "none"}")
         }
     }
 
