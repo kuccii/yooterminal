@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/statusScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -16,6 +17,7 @@
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
             android:minHeight="240dp"
+            android:text="@string/status_placeholder"
             android:textIsSelectable="true"
             android:textSize="13sp" />
 
@@ -24,21 +26,35 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Check TLS" />
+            android:text="@string/check_tls" />
 
         <Button
             android:id="@+id/checkPrinterButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Check printer" />
+            android:text="@string/check_printer" />
 
         <Button
             android:id="@+id/printTicketButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Print sample ticket" />
+            android:text="@string/print_sample" />
+
+        <Button
+            android:id="@+id/copyDiagnosticsButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/copy_diagnostics" />
+
+        <Button
+            android:id="@+id/clearButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/clear_log" />
 
     </LinearLayout>
 

@@ -1,111 +1,64 @@
 package com.yooterminal.pos
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
+import android.view.View
+import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.yooterminal.pos.databinding.ActivityMainBinding
-import com.yooterminal.pos.net.TlsProbe
-import com.yooterminal.pos.net.TlsResult
-import com.yooterminal.pos.net.TrustMode
-import com.yooterminal.pos.printer.PrintResult
-import com.yooterminal.pos.printer.SunmiPrinter
-import com.yooterminal.pos.printer.Ticket
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var printer: SunmiPrinter
+    private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        printer = SunmiPrinter(applicationContext)
 
-        binding.checkTlsButton.setOnClickListener { checkTls() }
-        binding.checkPrinterButton.setOnClickListener { checkPrinter() }
-        binding.printTicketButton.setOnClickListener { printSample() }
-    }
+        binding.checkTlsButton.setOnClickListener { viewModel.checkTls() }
+        binding.checkPrinterButton.setOnClickListener { viewModel.checkPrinter() }
+        binding.printTicketButton.setOnClickListener { viewModel.printSample() }
+        binding.copyDiagnosticsButton.setOnClickListener { copyDiagnostics() }
+        binding.clearButton.setOnClickListener { viewModel.clearLog() }
 
-    override fun onStart() {
-        super.onStart()
-        printer.bind()
-    }
-
-    override fun onStop() {
-        printer.unbind()
-        super.onStop()
-    }
-
-    private fun checkTls() {
-        binding.checkTlsButton.isEnabled = false
         lifecycleScope.launch {
-            appendLine("tls: checking $HEALTH_URL")
-            val cert = runCatching {
-                resources.openRawResource(R.raw.isrg_root_x1).use { TlsProbe.bundledRootCertificate(it) }
-            }.getOrNull()
-            appendLine("system trust: ${describe(TlsProbe.probe(HEALTH_URL, TrustMode.SYSTEM))}")
-            if (cert == null) {
-                appendLine("system + ISRG root: Failed(could not load bundled root)")
-            } else {
-                appendLine(
-                    "system + ISRG root: " +
-                        describe(TlsProbe.probe(HEALTH_URL, TrustMode.SYSTEM_PLUS_ISRG, cert))
-                )
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.log.collect(::render) }
+                launch { viewModel.busy.collect(::setBusy) }
             }
-            binding.checkTlsButton.isEnabled = true
         }
     }
 
-    private fun checkPrinter() {
-        lifecycleScope.launch {
-            val version = printer.serviceVersion()
-            appendLine("service version: ${version ?: "not bound"}")
-            appendLine("printer status: ${printer.status()}")
-            appendLine("last broadcast: ${printer.lastBroadcastAction() ?: "none"}")
-        }
+    private fun render(lines: List<String>) {
+        binding.statusText.text =
+            lines.joinToString("\n").ifEmpty { getString(R.string.status_placeholder) }
+        // The newest line is the one that matters; keep it in view.
+        binding.statusScroll.post { binding.statusScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
-    private fun printSample() {
-        binding.printTicketButton.isEnabled = false
-        lifecycleScope.launch {
-            when (val result = printer.print(sampleTicket())) {
-                is PrintResult.Success -> appendLine("print: success")
-                is PrintResult.Failed -> appendLine("print: failed — ${result.message}")
-            }
-            binding.printTicketButton.isEnabled = true
-        }
+    private fun setBusy(busy: Boolean) {
+        binding.checkTlsButton.isEnabled = !busy
+        binding.checkPrinterButton.isEnabled = !busy
+        binding.printTicketButton.isEnabled = !busy
     }
 
-    private fun sampleTicket() = Ticket(
-        operatorName = "RWENZORI EXPRESS",
-        originCity = "Kampala",
-        destinationCity = "Kigali",
-        travelDate = "Sat 14 Nov 2026",
-        departureTime = "07:00",
-        passengerName = "John Doe",
-        seat = "12A",
-        passengerIndex = 1,
-        passengerCount = 2,
-        bookingRef = "BLDEMO42",
-        amountLabel = "UGX 45,000",
-        paymentLabel = "CASH",
-        contactPhone = "+256700000000",
-        issuedAt = "09 Nov 2026 14:32",
-        reprintCount = 0,
-    )
-
-    private fun describe(result: TlsResult): String = when (result) {
-        is TlsResult.Ok -> "Ok(${result.status})"
-        is TlsResult.Failed -> "Failed(${result.message})"
-    }
-
-    private fun appendLine(line: String) {
-        binding.statusText.append(line + "\n")
-    }
-
-    companion object {
-        private const val HEALTH_URL = "https://www.yooterminal.com/api/health"
+    private fun copyDiagnostics() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(
+                getString(R.string.diagnostics_label),
+                viewModel.diagnosticsText(),
+            )
+        )
+        Toast.makeText(this, R.string.diagnostics_copied, Toast.LENGTH_SHORT).show()
     }
 }
