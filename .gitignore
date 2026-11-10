@@ -36,3 +36,12 @@ server/uploads/
 
 .env
 .vite
+
+# Android POS app
+pos-android/.gradle/
+pos-android/build/
+pos-android/app/build/
+pos-android/local.properties
+pos-android/keystore.properties
+*.jks
+*.keystore
