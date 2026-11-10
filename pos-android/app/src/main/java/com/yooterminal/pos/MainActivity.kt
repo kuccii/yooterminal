@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             appendLine("tls: checking $HEALTH_URL")
             val cert = runCatching {
-                TlsProbe.bundledRootCertificate(resources.openRawResource(R.raw.isrg_root_x1))
+                resources.openRawResource(R.raw.isrg_root_x1).use { TlsProbe.bundledRootCertificate(it) }
             }.getOrNull()
             appendLine("system trust: ${describe(TlsProbe.probe(HEALTH_URL, TrustMode.SYSTEM))}")
             if (cert == null) {

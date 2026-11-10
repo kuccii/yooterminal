@@ -1,5 +1,6 @@
 package com.yooterminal.pos.net
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.ConnectionSpec
@@ -50,6 +51,8 @@ object TlsProbe {
             client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
                 TlsResult.Ok(response.code)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             TlsResult.Failed(e.message ?: e::class.java.simpleName)
         }
