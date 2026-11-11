@@ -1,4 +1,4 @@
-# ZigzagBus Web
+# YooTerminal
 
 React + Vite frontend for a Uganda/Rwanda bus-ticketing platform, with a self-hosted
 backend in `server/` (Express + SQLite + [Better Auth](https://better-auth.com)).
