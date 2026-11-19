@@ -12,6 +12,7 @@ import { createSeatsRouter } from './seats.js';
 import { createProfileRouter } from './profile.js';
 import { createSiteContentRouter } from './siteContent.js';
 import { createNotificationsRouter } from './notify.js';
+import { createPosRouter } from './pos.js';
 import { UPLOADS_DIR } from './uploads.js';
 import { sweepExpiredHolds } from './booking.js';
 import { runRefundQueue } from './payments.js';
@@ -68,6 +69,7 @@ app.use('/api/seats', createSeatsRouter());
 app.use('/api/profile', createProfileRouter());
 app.use('/api/site-content', createSiteContentRouter());
 app.use('/api/notifications', createNotificationsRouter());
+app.use('/api/pos', createPosRouter());
 
 // Unknown /api routes → 404 JSON (never the SPA).
 app.use('/api', (req, res) => {
