@@ -187,6 +187,19 @@ export default function OperatorDashboard() {
         )}
       </Card>
 
+      {operator.status !== 'approved' && (
+        <div className="mt-4 rounded-2xl border border-border bg-secondary p-4 text-sm">
+          <p className="font-semibold text-primary">
+            {operator.status === 'suspended' ? 'Account suspended' : 'Application under review'}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {operator.status === 'suspended'
+              ? 'Your departures are hidden from customers. Contact the platform team to restore your account.'
+              : 'You can set up your fleet and fares now. Your departures stay hidden from customers until the platform team approves your company.'}
+          </p>
+        </div>
+      )}
+
       <div className="mt-6">{renderSection()}</div>
     </DashboardLayout>
   );
