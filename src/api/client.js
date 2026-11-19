@@ -79,6 +79,12 @@ export const db = {
     async get() {
       return request('/profile');
     },
+    async applyOperator({ companyName, phone, country }) {
+      return request('/profile/apply-operator', {
+        method: 'POST',
+        body: JSON.stringify({ company_name: companyName, phone, country }),
+      });
+    },
     async update({ fullName, phone }) {
       const body = {};
       if (fullName !== undefined) body.full_name = fullName;

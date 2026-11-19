@@ -2,6 +2,8 @@ import express from 'express';
 import { auth, getCaller } from './auth.js';
 import { HttpError } from './entities.js';
 import { sqlite } from './db.js';
+import { writeAuditLog } from './audit.js';
+import { applyOperatorApplication } from './operatorApplication.js';
 import { readImageBody, removeStoredImage, storeImage } from './uploads.js';
 
 const NAME_MAX_LENGTH = 100;
@@ -152,6 +154,27 @@ export function createProfileRouter() {
     removeStoredImage(previous);
 
     res.json({ logo_path: null });
+  });
+
+  router.post('/apply-operator', async (req, res) => {
+    const caller = await getCaller(req);
+    if (!caller) throw new HttpError(401, 'Sign in to apply as an operator');
+    if (caller.role === 'admin') throw new HttpError(409, 'Admins already have full platform access');
+
+    const result = applyOperatorApplication(sqlite, caller, req.body || {});
+
+    if (result.created) {
+      writeAuditLog({
+        actorId: caller.id,
+        action: 'operator.application',
+        entity: 'operator',
+        entityId: result.operator.id,
+        before: null,
+        after: { name: result.operator.name, slug: result.operator.slug, status: result.operator.status },
+      });
+    }
+
+    res.status(result.created ? 201 : 200).json({ role: result.role, operator: result.operator });
   });
 
   return router;
