@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+import { bearer } from 'better-auth/plugins/bearer';
 import { sqlite } from './db.js';
 import { sendMailSafe } from './mailer.js';
 
@@ -24,6 +25,7 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3001',
   basePath: '/api/auth',
   trustedOrigins: [CLIENT_ORIGIN, ...EXTRA_ORIGINS],
+  plugins: [bearer()],
   database: sqlite,
   emailAndPassword: {
     enabled: true,

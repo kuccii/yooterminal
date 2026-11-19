@@ -6,9 +6,12 @@ import Database from 'better-sqlite3';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DATA_DIR = path.join(__dirname, 'data');
-fs.mkdirSync(DATA_DIR, { recursive: true });
 
-export const dbPath = path.join(DATA_DIR, 'app.db');
+export const dbPath = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.join(DATA_DIR, 'app.db');
+
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 export const sqlite = new Database(dbPath);
 sqlite.pragma('journal_mode = WAL');
@@ -390,3 +393,57 @@ CREATE INDEX IF NOT EXISTS idx_blocked_seat_trip ON blocked_seat(trip_key, trave
 
 const { runMigrations } = await import('./migrations.js');
 runMigrations(sqlite);
+
+// ---------------------------------------------------------------------------
+// Better Auth core schema (reapplied after migrations so that migrations like
+// 007_clerk_app_user.sql which intentionally dropped these tables do not
+// leave the app unusable when the auth layer comes back online.
+// ---------------------------------------------------------------------------
+sqlite.exec(`
+CREATE TABLE IF NOT EXISTS user (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  emailVerified INTEGER NOT NULL DEFAULT 0,
+  image TEXT,
+  role TEXT NOT NULL DEFAULT 'user',
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS session (
+  id TEXT PRIMARY KEY NOT NULL,
+  expiresAt INTEGER NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  ipAddress TEXT,
+  userAgent TEXT,
+  userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS account (
+  id TEXT PRIMARY KEY NOT NULL,
+  accountId TEXT NOT NULL,
+  providerId TEXT NOT NULL,
+  userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  accessToken TEXT,
+  refreshToken TEXT,
+  accessTokenExpiresAt INTEGER,
+  refreshTokenExpiresAt INTEGER,
+  scope TEXT,
+  idToken TEXT,
+  password TEXT,
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS verification (
+  id TEXT PRIMARY KEY NOT NULL,
+  identifier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  expiresAt INTEGER NOT NULL,
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL
+);
+`);
