@@ -8,6 +8,8 @@
     "server": "node server/index.js",
     "start": "node server/index.js",
     "seed": "node server/seed.js",
+    "set-role": "node scripts/set-role.mjs",
+    "test:server": "node --test \"server/tests/*.test.js\"",
     "pos:publish": "node scripts/publish-pos-apk.mjs",
     "build": "vite build",
     "lint": "eslint . --quiet",
