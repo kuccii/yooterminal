@@ -92,11 +92,10 @@ export default function Register() {
     >
       <div className="mb-6 space-y-2">
         <Label>I am signing up as</Label>
-        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Account type">
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Account type">
           <button
             type="button"
-            role="radio"
-            aria-checked={accountType === "traveller"}
+            aria-pressed={accountType === "traveller"}
             onClick={() => setAccountType("traveller")}
             className={`rounded-xl border px-3 py-3 text-left transition ${
               accountType === "traveller"
@@ -109,8 +108,7 @@ export default function Register() {
           </button>
           <button
             type="button"
-            role="radio"
-            aria-checked={accountType === "operator"}
+            aria-pressed={accountType === "operator"}
             onClick={() => setAccountType("operator")}
             className={`rounded-xl border px-3 py-3 text-left transition ${
               accountType === "operator"
