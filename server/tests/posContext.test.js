@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import express from 'express';
 import Database from 'better-sqlite3';
-import { currencyFor, buildContext } from '../posContext.js';
+import { currencyFor, buildContext, appPolicyFromEnv } from '../posContext.js';
 import { createPosRouter } from '../pos.js';
 
 function makeDb() {
@@ -23,10 +24,28 @@ function makeDb() {
   return db;
 }
 
+function request(app, path) {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(0, () => {
+      const port = server.address().port;
+      http.get(`http://127.0.0.1:${port}${path}`, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          server.close(() => resolve({ status: res.statusCode, body: JSON.parse(body || '{}') }));
+        });
+      }).on('error', (err) => {
+        server.close(() => reject(err));
+      });
+    });
+  });
+}
+
 test('context maps Rwanda to RWF and Uganda to UGX', () => {
   assert.equal(currencyFor('Rwanda'), 'RWF');
   assert.equal(currencyFor('Uganda'), 'UGX');
   assert.equal(currencyFor(null), 'UGX');
+  assert.equal(currencyFor(undefined), 'UGX');
 });
 
 test('context resolves the operator by owner email, case-insensitively', () => {
@@ -43,7 +62,12 @@ test('context resolves the operator by owner email, case-insensitively', () => {
 });
 
 test('context returns a null operator when nobody owns the caller email', () => {
-  const ctx = buildContext({ sqlite: makeDb(), caller: { id: '2', email: 'nobody@example.com', role: 'user' }, now: new Date(), policy: {} });
+  const ctx = buildContext({
+    sqlite: makeDb(),
+    caller: { id: '2', email: 'nobody@example.com', role: 'user' },
+    now: new Date(),
+    policy: {}
+  });
   assert.equal(ctx.operator, null);
   assert.equal(ctx.user.role, 'user');
 });
@@ -51,8 +75,31 @@ test('context returns a null operator when nobody owns the caller email', () => 
 test('GET /api/pos/context is 401 without a caller', async () => {
   const app = express();
   app.use('/api/pos', createPosRouter({ sqlite: makeDb(), getCallerFn: async () => null }));
-  const server = app.listen(0);
-  const res = await fetch(`http://127.0.0.1:${server.address().port}/api/pos/context`);
+  const res = await request(app, '/api/pos/context');
   assert.equal(res.status, 401);
-  server.close();
+});
+
+test('GET /api/pos/app-version returns app policy', async () => {
+  const app = express();
+  app.use('/api/pos', createPosRouter({ sqlite: makeDb() }));
+  const res = await request(app, '/api/pos/app-version');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.min_version, 1);
+  assert.equal(res.body.latest_version, 2);
+  assert.equal(res.body.apk_url, 'https://www.yooterminal.com/pos/yooterminal-operator-2.0.0.apk');
+});
+
+test('appPolicyFromEnv returns defaults from environment', () => {
+  const policy = appPolicyFromEnv();
+  assert.equal(policy.minVersion, 1);
+  assert.equal(policy.latestVersion, 2);
+  assert.equal(policy.apkUrl, 'https://www.yooterminal.com/pos/yooterminal-operator-2.0.0.apk');
+  assert.equal(policy.sha256, '');
+});
+
+test('appPolicyFromEnv respects POS_MIN_VERSION env var', () => {
+  process.env.POS_MIN_VERSION = '3';
+  const policy = appPolicyFromEnv();
+  assert.equal(policy.minVersion, 3);
+  delete process.env.POS_MIN_VERSION;
 });

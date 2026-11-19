@@ -19,13 +19,13 @@ export function createPosRouter({ sqlite, getCallerFn } = {}) {
    */
   router.get('/context', async (req, res) => {
     const caller = await resolveCaller(req);
-    
+
     if (!caller) {
       return res.status(401).json({ error: 'Not signed in' });
     }
 
     const policy = appPolicyFromEnv();
-    
+
     const context = buildContext({
       sqlite: sqlite,
       caller: caller,
@@ -34,6 +34,16 @@ export function createPosRouter({ sqlite, getCallerFn } = {}) {
     });
 
     res.json(context);
+  });
+
+  router.get('/app-version', (req, res) => {
+    const policy = appPolicyFromEnv();
+    res.json({
+      min_version: policy.minVersion,
+      latest_version: policy.latestVersion,
+      apk_url: policy.apkUrl,
+      sha256: policy.sha256,
+    });
   });
 
   return router;
