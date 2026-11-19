@@ -21,6 +21,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 
 const APK_NAME = 'yooterminal-pos.apk';
+const ROOT_CERT_NAME = 'isrg-root-x1.pem';
+
+// Android 6 (the Sunmi V1) trusts neither ISRG Root X1 nor ISRG Root X2, so
+// this site's Let's Encrypt chain cannot validate there. The install page and
+// APK are therefore also served over plain HTTP by nginx; the page points at
+// that address so an operator who hits a certificate warning has a way out.
+// Override with POS_PUBLIC_HOST when publishing for a different domain.
+const PUBLIC_HOST = process.env.POS_PUBLIC_HOST || 'www.yooterminal.com';
+
 
 const source = process.argv[2]
   ? path.resolve(process.argv[2])
